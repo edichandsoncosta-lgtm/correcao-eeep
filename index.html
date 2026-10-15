@@ -11,7 +11,6 @@
     <link rel="stylesheet" href="style.css">
     <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js" defer></script>
     <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js" defer></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js" defer></script>
     <script src="omr.js" defer></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
     <script src="supabase-config.js" defer></script>
@@ -101,13 +100,13 @@
           <div>
             <p class="eyebrow">BEM-VINDO(A) À ÁREA DO PROFESSOR</p>
             <h1>Correção de provas</h1>
-            <p class="intro-copy">Fotografe o cartão completo: o QR identifica o aluno e a prova, e a câmera lê as alternativas preenchidas.</p>
+            <p class="intro-copy">Aponte a câmera para o cartão: o leitor óptico identifica as alternativas e mostra as respostas para confirmação antes de corrigir.</p>
           </div>
           <div class="scan-actions">
             <button class="button button-primary" id="scan-button" type="button">
-              <span class="button-camera">▣</span> Fotografar cartão
+              <span class="button-camera">▣</span> Ler marcações ao vivo
             </button>
-            <button class="text-button scan-qr-button" id="scan-qr-button" type="button">Ler somente QR</button>
+            <button class="text-button scan-qr-button" id="scan-qr-button" type="button">Ler QR externo (opcional)</button>
           </div>
         </section>
 
@@ -148,7 +147,7 @@
             </table>
           </div>
           <p class="directory-empty" id="teacher-students-empty">Nenhum aluno cadastrado ainda.</p>
-          <p class="print-hint">Os cartões usam o gabarito selecionado em “Gabaritos salvos”. Para corrigir pela câmera, fotografe o cartão completo; confira as respostas identificadas antes de salvar.</p>
+          <p class="print-hint">Os cartões usam o gabarito selecionado em “Gabaritos salvos”. Aponte a câmera para o cartão inteiro e confira as respostas identificadas antes de salvar.</p>
         </section>
 
         <section class="content-grid">
@@ -171,10 +170,11 @@
               <div class="saved-key-actions">
                 <button class="button button-secondary" id="new-key" type="button">Novo gabarito</button>
                 <button class="button button-danger" id="delete-key" type="button" disabled>Excluir</button>
+                <button class="button button-secondary" id="print-test-card" type="button" disabled>Imprimir cartão de teste</button>
                 <button class="button button-primary" id="print-student-cards" type="button" disabled>Imprimir cartões (4 por folha)</button>
               </div>
             </div>
-            <p class="saved-key-print-hint">Selecione ou salve um gabarito e cadastre os alunos em “Meus alunos”; depois, imprima aqui os cartões nominais, quatro por folha A4.</p>
+            <p class="saved-key-print-hint">Selecione um gabarito salvo. Use “Imprimir cartão de teste” para testar a câmera sem cadastrar aluno; marque A, B, C, D, E em sequência e aponte a câmera. Para a turma, cadastre alunos e imprima os cartões nominais com os quadrados de alinhamento.</p>
             <div class="form-grid">
               <label class="field field-wide">
                 <span>Nome da prova</span>
@@ -232,13 +232,15 @@
                     <p class="card-title">CARTÃO-RESPOSTA</p>
                     <p class="card-meta"><strong>Aluno:</strong> <span id="preview-student-name">Selecione um aluno</span><br><strong>Série:</strong> <span id="preview-student-series">—</span><br><strong>Turma:</strong> <span id="preview-student-class">—</span><br><strong>Prova:</strong> <span id="preview-exam-name">—</span><br><strong>Disciplina:</strong> <span id="preview-exam-discipline">—</span></p>
                   </div>
-                  <div class="card-qr-block">
-                    <div class="card-qr preview-qr-placeholder" aria-label="QR Code será gerado ao imprimir">QR</div>
-                    <span class="card-qr-caption">LEIA PARA IDENTIFICAR</span>
+                  <div class="card-markers" aria-hidden="true">
+                  <span class="card-marker card-marker-top-left"></span>
+                  <span class="card-marker card-marker-top-right"></span>
+                  <span class="card-marker card-marker-bottom-right"></span>
+                  <span class="card-marker card-marker-bottom-left"></span>
                   </div>
                 </header>
                 <div class="answer-grid preview-answer-grid" id="preview-answer-grid"></div>
-                <p class="instructions">Preencha completamente uma bolha por questão. Fotografe o cartão inteiro para corrigir.</p>
+                <p class="instructions">Preencha uma bolha por questão. Alinhe os quatro quadrados com a câmera para corrigir.</p>
               </article>
               <div class="answer-key-preview-wrap">
                 <h4>Gabarito correto (uso do professor)</h4>
@@ -253,14 +255,14 @@
               <h2>Corrija em 3 passos</h2>
               <ol class="steps-list">
                 <li><span>1</span><div><strong>Prepare o gabarito</strong><p>Marque as alternativas corretas da prova.</p></div></li>
-                <li><span>2</span><div><strong>Fotografe o cartão inteiro</strong><p>Enquadre o cartão completo, plano e bem iluminado, para ler o QR e as bolhas.</p></div></li>
-                <li><span>3</span><div><strong>Confira e salve</strong><p>Revise as alternativas lidas pela câmera e confirme para calcular a nota.</p></div></li>
+                <li><span>2</span><div><strong>Aponte a câmera para o cartão</strong><p>Alinhe os quatro quadrados pretos e aguarde a leitura das bolhas.</p></div></li>
+                <li><span>3</span><div><strong>Confira e salve</strong><p>Revise as respostas; marcações incertas ficam em branco para você confirmar.</p></div></li>
               </ol>
             </article>
-            <article class="qr-note">
-              <div class="qr-note-icon">▦</div>
-              <div><strong>Como funciona a leitura?</strong><p>Fotografe o cartão inteiro: o QR identifica aluno e prova, e a leitura óptica reconhece as bolhas. As respostas aparecem para conferência antes de salvar.</p>
-                <button class="text-button" id="format-button" type="button">Ver formato do QR Code <span>→</span></button>
+            <article class="omr-note">
+              <div class="omr-note-icon">◉</div>
+              <div><strong>Como funciona a leitura?</strong><p>Aponte a câmera para o cartão. As marcas nos cantos alinham a folha e a leitura óptica identifica as bolhas; o QR Code não é usado.</p>
+                <button class="text-button" id="format-button" type="button">O que fazer em caso de dúvida? <span>→</span></button>
               </div>
             </article>
           </aside>
@@ -384,17 +386,41 @@
       </main>
     </div>
 
-    <!-- Janela de leitura do QR Code e seleção de uma imagem do cartão-resposta. -->
+    <!-- Janela de leitura contínua das bolhas com a câmera do celular. -->
+    <div class="modal-backdrop" id="omr-camera-modal" hidden>
+      <section class="modal scanner-dialog omr-camera-dialog" role="dialog" aria-modal="true" aria-labelledby="omr-camera-title">
+        <button class="modal-close" data-close="omr-camera-modal" type="button" aria-label="Fechar">×</button>
+        <p class="eyebrow">LEITURA ÓPTICA AO VIVO</p>
+        <h2 id="omr-camera-title">Aponte para o cartão</h2>
+        <p class="modal-description">Escolha o gabarito e o aluno. Enquadre o cartão inteiro, com os quatro quadrados dos cantos visíveis; as respostas serão lidas ao vivo.</p>
+        <div class="omr-camera-fields">
+          <label class="field"><span>Gabarito</span><select id="omr-key-select" required><option value="">Selecione um gabarito salvo</option></select></label>
+          <label class="field"><span>Aluno</span><select id="omr-student-select" required><option value="">Selecione um aluno ou teste</option></select></label>
+        </div>
+        <div class="omr-camera-view">
+          <video id="omr-camera-video" autoplay playsinline muted></video>
+          <div class="omr-card-guide" aria-hidden="true"><span>Alinhe os 4 quadrados</span></div>
+        </div>
+        <div class="scanner-status" id="omr-camera-status" role="status">Aguardando câmera…</div>
+        <div class="omr-live-answers" id="omr-live-answers" aria-live="polite"></div>
+        <div class="scanner-actions">
+          <button class="button button-primary" id="confirm-omr-reading" type="button" disabled>Conferir respostas lidas</button>
+        </div>
+        <p class="permission-hint">A câmera exige HTTPS ou localhost. Os quadrados pretos nos cantos do cartão servem para alinhamento, não para identificar o aluno.</p>
+      </section>
+    </div>
+
+    <!-- Leitor de QR legado para cartões externos. -->
     <div class="modal-backdrop" id="scanner-modal" hidden>
       <section class="modal scanner-dialog" role="dialog" aria-modal="true" aria-labelledby="scanner-title">
         <button class="modal-close" data-close="scanner-modal" type="button" aria-label="Fechar">×</button>
         <p class="eyebrow">LEITURA DO CARTÃO-RESPOSTA</p>
-        <h2 id="scanner-title">Leia ou fotografe o cartão</h2>
-        <p class="modal-description">Para ler as bolhas, fotografe o cartão inteiro de cima, plano e bem iluminado. As respostas detectadas aparecem para conferência antes de salvar.</p>
+        <h2 id="scanner-title">Ler QR Code externo</h2>
+        <p class="modal-description">Este leitor opcional aceita QR Codes externos com respostas. Os cartões nominais novos são lidos pelo leitor óptico ao vivo, sem QR Code.</p>
         <div id="reader"><div class="reader-placeholder"><span>▦</span><p>A câmera será iniciada ao abrir o leitor.</p></div></div>
         <div class="scanner-status" id="scanner-status" role="status">Aguardando câmera…</div>
         <div class="scanner-actions">
-          <button class="button button-secondary" id="upload-qr" type="button">Fotografar / enviar cartão completo</button>
+          <button class="button button-secondary" id="upload-qr" type="button">Enviar imagem de QR externo</button>
         </div>
         <p class="permission-hint">Permita o acesso à câmera quando o navegador solicitar. A câmera exige HTTPS ou localhost.</p>
       </section>
@@ -405,30 +431,25 @@
       <section class="modal manual-correction-dialog" role="dialog" aria-modal="true" aria-labelledby="manual-correction-title">
         <button class="modal-close" data-close="manual-correction-modal" type="button" aria-label="Fechar">×</button>
         <p class="eyebrow">RESPOSTAS DO CARTÃO</p>
-        <h2 id="manual-correction-title">Corrigir prova</h2>
+        <h2 id="manual-correction-title">Confirme as respostas lidas</h2>
         <p class="modal-description" id="manual-correction-description"></p>
         <form id="manual-correction-form">
           <div class="manual-answer-grid" id="manual-answer-grid"></div>
           <p class="auth-message" id="manual-correction-message" role="status" aria-live="polite"></p>
-          <button class="button button-primary modal-done" type="submit">Corrigir e salvar resultado</button>
+          <button class="button button-primary modal-done" id="manual-correction-save" type="submit">Corrigir e salvar resultado</button>
+          <button class="button button-primary modal-done" id="manual-correction-finish-test" type="button" hidden>Concluir teste sem salvar</button>
         </form>
       </section>
     </div>
 
-    <!-- Janela com o padrão de dados esperado no QR Code. -->
+    <!-- Orientações para revisar marcações que a câmera não reconheceu com segurança. -->
     <div class="modal-backdrop" id="format-modal" hidden>
       <section class="modal format-dialog" role="dialog" aria-modal="true" aria-labelledby="format-title">
         <button class="modal-close" data-close="format-modal" type="button" aria-label="Fechar">×</button>
-        <p class="eyebrow">PADRÃO DO CARTÃO-RESPOSTA</p>
-        <h2 id="format-title">Formato esperado no QR Code</h2>
-        <p class="modal-description">QR Codes externos podem trazer aluno e respostas. Nos cartões nominais, o QR identifica aluno e prova; fotografe o cartão completo para ler as bolhas e confira as respostas antes de salvar.</p>
-        <pre class="code-example"><code>{
-  "aluno": "Maria Silva",
-  "turma": "2º ano A",
-  "prova": "Avaliação de Biologia",
-  "respostas": ["A", "C", "B", "D", "E"]
-}</code></pre>
-        <p class="format-footnote">Para QR Codes externos, use alternativas A, B, C, D ou E e a mesma quantidade de respostas do gabarito. A leitura óptica funciona nos cartões nominais impressos pelo sistema; confira as respostas detectadas antes de salvar.</p>
+        <p class="eyebrow">REVISÃO DA LEITURA ÓPTICA</p>
+        <h2 id="format-title">Confira as respostas duvidosas</h2>
+        <p class="modal-description">A câmera deixa em branco questões apagadas, sem marcação ou com mais de uma bolha preenchida. Na tela de confirmação, compare essas questões com o cartão e selecione a alternativa correta antes de salvar.</p>
+        <p class="format-footnote">A leitura funciona nos cartões impressos pelo sistema, com os quatro quadrados de alinhamento visíveis. Use boa iluminação e mantenha o cartão inteiro enquadrado.</p>
         <button class="button button-primary modal-done" data-close="format-modal" type="button">Entendi</button>
       </section>
     </div>

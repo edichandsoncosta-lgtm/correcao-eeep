@@ -49,6 +49,7 @@
     teacherStudentClass: $('#teacher-student-class'),
     teacherStudentsBody: $('#teacher-students-body'),
     teacherStudentsEmpty: $('#teacher-students-empty'),
+    printTestCard: $('#print-test-card'),
     printStudentCards: $('#print-student-cards'),
     cardPreviewStudent: $('#card-preview-student'),
     previewStudentName: $('#preview-student-name'),
@@ -120,20 +121,36 @@
     areasEmpty: $('#areas-empty'),
     areaCount: $('#area-count'),
     addDefaultAreas: $('#add-default-areas'),
+    omrCameraModal: $('#omr-camera-modal'),
+    omrCameraVideo: $('#omr-camera-video'),
+    omrCameraStatus: $('#omr-camera-status'),
+    omrLiveAnswers: $('#omr-live-answers'),
+    omrKeySelect: $('#omr-key-select'),
+    omrStudentSelect: $('#omr-student-select'),
+    confirmOmrReading: $('#confirm-omr-reading'),
     scannerModal: $('#scanner-modal'),
     scannerStatus: $('#scanner-status'),
     qrFile: $('#qr-file'),
     manualCorrectionModal: $('#manual-correction-modal'),
     manualCorrectionForm: $('#manual-correction-form'),
+    manualCorrectionTitle: $('#manual-correction-title'),
     manualCorrectionDescription: $('#manual-correction-description'),
     manualAnswerGrid: $('#manual-answer-grid'),
     manualCorrectionMessage: $('#manual-correction-message'),
+    manualCorrectionSave: $('#manual-correction-save'),
+    manualCorrectionFinishTest: $('#manual-correction-finish-test'),
     printRoot: $('#print-root'),
     toast: $('#toast')
   };
 
   let state;
   let scanner = null;
+  let omrCameraStream = null;
+  let omrCameraFrame = 0;
+  let omrLastFrameTime = 0;
+  let omrCurrentResponses = null;
+  let omrCurrentMarkers = null;
+  let omrCanvas = null;
   let toastTimeout;
   let supabaseClient = null;
   let activeUserId = null;
@@ -353,6 +370,7 @@
     elements.deleteKey.disabled = !selectedId || !state.savedKeys.some((key) => key.id === selectedId);
     elements.printStudentCards.disabled = !state.students.length ||
       !state.savedKeys.some((key) => key.id === selectedId);
+    elements.printTestCard.disabled = !state.savedKeys.some((key) => key.id === selectedId);
     renderCardPreview();
   }
 
@@ -475,6 +493,8 @@
     }
     elements.printStudentCards.disabled = state.students.length === 0 ||
       !state.savedKeys.some((key) => key.id === state.selectedKeyId);
+    elements.printTestCard.disabled =
+      !state.savedKeys.some((key) => key.id === state.selectedKeyId);
     renderCardPreview();
   }
 
@@ -535,6 +555,77 @@
     showToast('Aluno excluído.');
   }
 
+  function createPrintableCard(savedKey, student, isTestCard = false) {
+    const card = document.createElement('article');
+    card.className = 'answer-card';
+    const markers = document.createElement('div');
+    markers.className = 'card-markers';
+    markers.setAttribute('aria-hidden', 'true');
+    ['top-left', 'top-right', 'bottom-right', 'bottom-left'].forEach((position) => {
+      const marker = document.createElement('span');
+      marker.className = `card-marker card-marker-${position}`;
+      markers.append(marker);
+    });
+    card.append(markers);
+    const header = document.createElement('header');
+    header.className = 'card-header';
+    const identity = document.createElement('div');
+    identity.className = 'card-identity';
+    const series = getStudentSeries(student);
+    const className = getStudentClass(student);
+    identity.innerHTML = `<p class="card-school">EEEP LUIZETE ALBANO DE FREITAS MENEZES</p><p class="card-title">CARTÃO-RESPOSTA</p><p class="card-meta"><strong>Aluno:</strong> ${escapeHtml(student.name)}<br><strong>Série:</strong> ${escapeHtml(series)}<br><strong>Turma:</strong> ${escapeHtml(className)}<br><strong>Prova:</strong> ${escapeHtml(savedKey.examName)}<br><strong>Disciplina:</strong> ${escapeHtml(savedKey.discipline)}</p>`;
+    header.append(identity);
+    card.append(header);
+
+    const answers = document.createElement('div');
+    const answerColumns = savedKey.answers.length > 30 ? 3 : 2;
+    answers.className = `answer-grid${answerColumns === 3 ? ' answer-grid-dense' : ''}`;
+    answers.style.setProperty('--question-rows', String(Math.ceil(savedKey.answers.length / answerColumns)));
+    savedKey.answers.forEach((_, questionIndex) => {
+      const row = document.createElement('div');
+      row.className = 'question-row';
+      const number = document.createElement('span');
+      number.className = 'question-number';
+      number.textContent = `${questionIndex + 1}.`;
+      row.append(number);
+      OPTIONS.slice(1).forEach((option) => {
+        const choice = document.createElement('span');
+        choice.className = 'choice';
+        const bubble = document.createElement('span');
+        bubble.className = 'bubble';
+        const letter = document.createElement('span');
+        letter.textContent = option;
+        choice.append(bubble, letter);
+        row.append(choice);
+      });
+      answers.append(row);
+    });
+    card.append(answers);
+    const instruction = document.createElement('p');
+    instruction.className = 'instructions';
+    instruction.textContent = isTestCard
+      ? 'TESTE: preencha A, B, C, D, E nessa ordem e repita. Marque bem uma bolha por questão.'
+      : 'Preencha completamente uma bolha por questão. Alinhe os quatro quadrados com a câmera para corrigir.';
+    card.append(instruction);
+
+    return card;
+  }
+
+  function printCards(cards) {
+    const root = elements.printRoot;
+    root.replaceChildren();
+    cards.forEach((card, index) => {
+      if (index % 4 === 0) {
+        const page = document.createElement('section');
+        page.className = 'print-page';
+        root.append(page);
+      }
+      root.lastElementChild.append(card);
+    });
+    window.addEventListener('afterprint', () => root.replaceChildren(), { once: true });
+    window.print();
+  }
+
   function printStudentCards() {
     const savedKey = state.savedKeys.find((key) => key.id === state.selectedKeyId);
     if (!savedKey) {
@@ -546,95 +637,37 @@
       showToast('Cadastre pelo menos um aluno antes de imprimir.');
       return;
     }
-    if (typeof window.QRCode !== 'function') {
-      showToast('Não foi possível carregar o gerador de QR Code. Verifique a conexão e recarregue a página.');
+    try {
+      printCards(state.students.map((student) => createPrintableCard(savedKey, student)));
+    } catch (error) {
+      console.error('Não foi possível gerar os cartões dos alunos.', error);
+      elements.printRoot.replaceChildren();
+      showToast('Não foi possível gerar os cartões. Confira os dados e tente novamente.');
       return;
     }
-    const root = elements.printRoot;
-    root.replaceChildren();
-    for (let index = 0; index < state.students.length; index += 1) {
-      const student = state.students[index];
-      if (index % 4 === 0) {
-        const page = document.createElement('section');
-        page.className = 'print-page';
-        root.append(page);
-      }
-      const page = root.lastElementChild;
-      const card = document.createElement('article');
-      card.className = 'answer-card';
-      const header = document.createElement('header');
-      header.className = 'card-header';
-      const identity = document.createElement('div');
-      identity.className = 'card-identity';
-      const series = getStudentSeries(student);
-      const className = getStudentClass(student);
-      identity.innerHTML = `<p class="card-school">EEEP LUIZETE ALBANO DE FREITAS MENEZES</p><p class="card-title">CARTÃO-RESPOSTA</p><p class="card-meta"><strong>Aluno:</strong> ${escapeHtml(student.name)}<br><strong>Série:</strong> ${escapeHtml(series)}<br><strong>Turma:</strong> ${escapeHtml(className)}<br><strong>Prova:</strong> ${escapeHtml(savedKey.examName)}<br><strong>Disciplina:</strong> ${escapeHtml(savedKey.discipline)}</p>`;
-      const qr = document.createElement('div');
-      qr.className = 'card-qr';
-      const qrCaption = document.createElement('span');
-      qrCaption.className = 'card-qr-caption';
-      qrCaption.textContent = 'LEIA PARA IDENTIFICAR';
-      const qrBlock = document.createElement('div');
-      qrBlock.className = 'card-qr-block';
-      qrBlock.append(qr, qrCaption);
-      header.append(identity, qrBlock);
-      card.append(header);
-
-      const answers = document.createElement('div');
-      const answerColumns = savedKey.answers.length > 30 ? 3 : 2;
-      answers.className = `answer-grid${answerColumns === 3 ? ' answer-grid-dense' : ''}`;
-      answers.style.setProperty('--question-rows', String(Math.ceil(savedKey.answers.length / answerColumns)));
-      savedKey.answers.forEach((answer, questionIndex) => {
-        const row = document.createElement('div');
-        row.className = 'question-row';
-        const number = document.createElement('span');
-        number.className = 'question-number';
-        number.textContent = `${questionIndex + 1}.`;
-        row.append(number);
-        OPTIONS.slice(1).forEach((option) => {
-          const choice = document.createElement('span');
-          choice.className = 'choice';
-          const bubble = document.createElement('span');
-          bubble.className = 'bubble';
-          const letter = document.createElement('span');
-          letter.textContent = option;
-          choice.append(bubble, letter);
-          row.append(choice);
-        });
-        answers.append(row);
-      });
-      card.append(answers);
-      const instruction = document.createElement('p');
-      instruction.className = 'instructions';
-      instruction.textContent = 'Preencha completamente uma bolha por questão. Fotografe o cartão inteiro para corrigir.';
-      card.append(instruction);
-      page.append(card);
-
-      const qrPayload = [
-        'C',
-        student.id,
-        student.name,
-        className,
-        student.series || inferStudentSeries(student.className) || '',
-        savedKey.id
-      ];
-      try {
-        new window.QRCode(qr, {
-          text: stringifyQrPayload(qrPayload),
-          width: 240,
-          height: 240,
-          correctLevel: window.QRCode.CorrectLevel.M
-        });
-      } catch (error) {
-        console.error(`Não foi possível gerar o QR Code do cartão de ${student.name}.`, error);
-        root.replaceChildren();
-        showToast(`Não foi possível gerar o QR Code do cartão de ${student.name}. Confira os dados do aluno e tente novamente.`);
-        return;
-      }
-    }
     renderSavedKeyOptions();
-    window.addEventListener('afterprint', () => root.replaceChildren(), { once: true });
-    window.print();
+  }
+
+  function printTestCard() {
+    const savedKey = state.savedKeys.find((key) => key.id === state.selectedKeyId);
+    if (!savedKey) {
+      showToast('Selecione um gabarito salvo antes de imprimir o cartão de teste.');
+      elements.savedKeySelect.focus();
+      return;
+    }
+    const testStudent = {
+      id: `teste-omr-${savedKey.id}`,
+      name: 'TESTE DE LEITURA OPTICA',
+      className: 'TURMA TESTE',
+      series: 'TESTE'
+    };
+    try {
+      printCards([createPrintableCard(savedKey, testStudent, true)]);
+    } catch (error) {
+      console.error('Não foi possível gerar o cartão de teste.', error);
+      elements.printRoot.replaceChildren();
+      showToast('Não foi possível gerar o cartão de teste. Tente novamente.');
+    }
   }
 
   function escapeHtml(value) {
@@ -647,28 +680,36 @@
     })[character]);
   }
 
-  function stringifyQrPayload(payload) {
-    return JSON.stringify(payload).replace(/[^\x00-\x7F]/g, (character) =>
-      `\\u${character.charCodeAt(0).toString(16).padStart(4, '0')}`
-    );
-  }
-
   function showManualCorrection(payload, savedKey, detectedResponses = null) {
     pendingCardCorrection = { payload, savedKey };
+    const isTestCard = payload.teste === true;
+    elements.manualCorrectionTitle.textContent =
+      detectedResponses ? 'Confirme as respostas lidas' : 'Corrigir prova';
     const classLabel = [payload.serie, payload.turma].filter(Boolean).join(' ');
     elements.manualCorrectionDescription.textContent =
       `${payload.aluno} · ${classLabel || 'Turma não informada'} · ${savedKey.examName} — ${savedKey.discipline}`;
     elements.manualCorrectionMessage.textContent = '';
     elements.manualCorrectionMessage.classList.remove('error');
+    elements.manualCorrectionSave.hidden = isTestCard;
+    elements.manualCorrectionFinishTest.hidden = !isTestCard;
+    if (isTestCard) {
+      elements.manualCorrectionMessage.textContent =
+        'Cartão de teste: preencha A, B, C, D, E nessa ordem e repita. Compare com as respostas lidas. Este teste não salva resultados.';
+    }
     if (detectedResponses) {
       const detectedCount = detectedResponses.filter(Boolean).length;
       const reviewCount = detectedResponses.length - detectedCount;
-      elements.manualCorrectionMessage.textContent = reviewCount
+      const detectedMessage = reviewCount
         ? `Leitura automática: ${detectedCount} respostas identificadas. ${reviewCount} ${reviewCount === 1 ? 'questão precisa' : 'questões precisam'} de conferência. Revise tudo antes de salvar.`
         : 'Leitura automática concluída. Confira todas as respostas antes de salvar.';
+      elements.manualCorrectionMessage.textContent = isTestCard
+        ? `Cartão de teste: ${detectedCount} respostas identificadas; ${reviewCount} precisam de conferência. Compare com o padrão A, B, C, D, E repetido. Este teste não salva resultados.`
+        : detectedMessage;
     } else {
       elements.manualCorrectionMessage.textContent =
-        'O QR identificou o aluno, mas este modo não leu as bolhas. Informe as respostas manualmente.';
+        isTestCard
+          ? 'O QR do cartão de teste foi lido, mas este modo não lê as bolhas. Fotografe o cartão inteiro para testar a leitura óptica.'
+          : 'O QR identificou o aluno, mas este modo não leu as bolhas. Informe as respostas manualmente.';
     }
     elements.manualAnswerGrid.replaceChildren();
     savedKey.answers.forEach((_, index) => {
@@ -697,6 +738,7 @@
     event.preventDefault();
     if (!pendingCardCorrection) return;
     const { payload, savedKey } = pendingCardCorrection;
+    if (payload.teste) return;
     const responses = [...elements.manualAnswerGrid.querySelectorAll('select')].map((select) => select.value);
     if (responses.length !== savedKey.answers.length || responses.some((answer) => !OPTIONS.slice(1).includes(answer))) {
       elements.manualCorrectionMessage.textContent = 'Selecione uma resposta para cada questão.';
@@ -771,10 +813,18 @@
     });
     elements.newKey.addEventListener('click', startNewKey);
     elements.deleteKey.addEventListener('click', deleteSavedKey);
-    elements.scanButton.addEventListener('click', () => {
-      if (saveExamSettings()) elements.qrFile.click();
-    });
+    elements.scanButton.addEventListener('click', openOmrCamera);
     elements.scanQrButton.addEventListener('click', openScanner);
+    elements.omrKeySelect.addEventListener('change', () => {
+      omrCurrentResponses = null;
+      elements.confirmOmrReading.disabled = true;
+      elements.omrCameraStatus.textContent = 'Lendo o cartão pela câmera…';
+      elements.omrLiveAnswers.replaceChildren();
+    });
+    elements.omrStudentSelect.addEventListener('change', () => {
+      elements.confirmOmrReading.disabled = !omrCurrentResponses || !elements.omrStudentSelect.value;
+    });
+    elements.confirmOmrReading.addEventListener('click', confirmOmrReading);
     elements.teacherStudentForm.addEventListener('submit', addTeacherStudent);
     elements.teacherStudentsBody.addEventListener('click', handleTeacherStudentAction);
     elements.cardPreviewStudent.addEventListener('change', renderCardPreview);
@@ -783,6 +833,8 @@
       field.addEventListener('change', renderCardPreview);
     });
     elements.printStudentCards.addEventListener('click', printStudentCards);
+    elements.printTestCard.addEventListener('click', printTestCard);
+    elements.manualCorrectionFinishTest.addEventListener('click', () => closeModal('manual-correction-modal'));
     elements.manualCorrectionForm.addEventListener('submit', submitManualCorrection);
     $('#format-button').addEventListener('click', () => showModal('format-modal'));
     elements.exportButton.addEventListener('click', exportCsv);
@@ -1616,9 +1668,205 @@
       pendingCardCorrection = null;
       elements.manualCorrectionForm.reset();
     }
+    if (id === 'omr-camera-modal') stopOmrCamera();
     if (document.querySelector('.modal-backdrop:not([hidden])')) return;
     document.body.style.overflow = '';
     if (id === 'scanner-modal') await stopScanner();
+  }
+
+  function renderOmrCameraOptions() {
+    elements.omrKeySelect.replaceChildren();
+    const keyPlaceholder = document.createElement('option');
+    keyPlaceholder.value = '';
+    keyPlaceholder.textContent = 'Selecione um gabarito salvo';
+    elements.omrKeySelect.append(keyPlaceholder);
+    state.savedKeys.forEach((key) => {
+      const option = document.createElement('option');
+      option.value = key.id;
+      option.textContent = `${key.examName} — ${key.discipline}`;
+      elements.omrKeySelect.append(option);
+    });
+    elements.omrKeySelect.value = state.savedKeys.some((key) => key.id === state.selectedKeyId)
+      ? state.selectedKeyId
+      : '';
+
+    elements.omrStudentSelect.replaceChildren();
+    const studentPlaceholder = document.createElement('option');
+    studentPlaceholder.value = '';
+    studentPlaceholder.textContent = 'Selecione um aluno ou teste';
+    elements.omrStudentSelect.append(studentPlaceholder);
+    const testOption = document.createElement('option');
+    testOption.value = '__test__';
+    testOption.textContent = 'Cartão de teste — não salva resultado';
+    elements.omrStudentSelect.append(testOption);
+    state.students.forEach((student) => {
+      const option = document.createElement('option');
+      option.value = student.id;
+      option.textContent = `${student.name} — ${getStudentSeries(student)} ${getStudentClass(student)}`.trim();
+      elements.omrStudentSelect.append(option);
+    });
+    elements.omrStudentSelect.value = state.students.length ? state.students[0].id : '__test__';
+  }
+
+  async function openOmrCamera() {
+    if (!navigator.mediaDevices || typeof navigator.mediaDevices.getUserMedia !== 'function') {
+      showToast('A câmera não está disponível neste navegador. Abra o site por HTTPS e permita o acesso à câmera.');
+      return;
+    }
+    if (!window.CardOMR) {
+      showToast('O leitor óptico não carregou. Recarregue a página e tente novamente.');
+      return;
+    }
+    renderOmrCameraOptions();
+    elements.omrCameraStatus.className = 'scanner-status';
+    elements.omrCameraStatus.textContent = 'Solicitando acesso à câmera…';
+    elements.omrLiveAnswers.replaceChildren();
+    elements.confirmOmrReading.disabled = true;
+    omrCurrentResponses = null;
+    omrCurrentMarkers = null;
+    showModal('omr-camera-modal');
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: false,
+        video: { facingMode: { ideal: 'environment' } }
+      });
+      if (elements.omrCameraModal.hidden) {
+        stream.getTracks().forEach((track) => track.stop());
+        return;
+      }
+      omrCameraStream = stream;
+      elements.omrCameraVideo.srcObject = omrCameraStream;
+      await elements.omrCameraVideo.play();
+      elements.omrCameraStatus.textContent =
+        'Câmera ativa. Enquadre o cartão inteiro e mantenha os quatro quadrados visíveis.';
+      omrLastFrameTime = 0;
+      omrCameraFrame = requestAnimationFrame(scanOmrCameraFrame);
+    } catch (error) {
+      console.error('Não foi possível iniciar a câmera para leitura óptica.', error);
+      elements.omrCameraStatus.className = 'scanner-status error';
+      elements.omrCameraStatus.textContent = cameraErrorMessage(error);
+    }
+  }
+
+  function scanOmrCameraFrame(timestamp) {
+    if (!omrCameraStream || elements.omrCameraModal.hidden) return;
+    if (timestamp - omrLastFrameTime >= 300) {
+      omrLastFrameTime = timestamp;
+      try {
+        const video = elements.omrCameraVideo;
+        if (video.videoWidth && video.videoHeight) {
+          const scale = Math.min(1, 800 / Math.max(video.videoWidth, video.videoHeight));
+          if (!omrCanvas) omrCanvas = document.createElement('canvas');
+          omrCanvas.width = Math.round(video.videoWidth * scale);
+          omrCanvas.height = Math.round(video.videoHeight * scale);
+          const context = omrCanvas.getContext('2d', { willReadFrequently: true });
+          if (!context) throw new Error('Não foi possível preparar a imagem da câmera.');
+          context.drawImage(video, 0, 0, omrCanvas.width, omrCanvas.height);
+          const imageData = context.getImageData(0, 0, omrCanvas.width, omrCanvas.height);
+          updateOmrCameraReading(imageData);
+        }
+      } catch (error) {
+        console.error('Não foi possível analisar o vídeo do cartão.', error);
+        elements.omrCameraStatus.className = 'scanner-status error';
+        elements.omrCameraStatus.textContent = 'Falha ao analisar a imagem da câmera. Tente novamente.';
+      }
+    }
+    omrCameraFrame = requestAnimationFrame(scanOmrCameraFrame);
+  }
+
+  function updateOmrCameraReading(imageData) {
+    const markers = window.CardOMR.findCardMarkers(imageData);
+    omrCurrentMarkers = markers;
+    const savedKey = state.savedKeys.find((key) => key.id === elements.omrKeySelect.value);
+    const studentSelected = Boolean(elements.omrStudentSelect.value);
+    if (!markers) {
+      omrCurrentResponses = null;
+      elements.confirmOmrReading.disabled = true;
+      elements.omrCameraStatus.className = 'scanner-status';
+      elements.omrCameraStatus.textContent = 'Enquadre o cartão inteiro. Os quatro quadrados dos cantos precisam aparecer.';
+      renderOmrLiveAnswers([]);
+      return;
+    }
+    if (!savedKey) {
+      omrCurrentResponses = null;
+      elements.confirmOmrReading.disabled = true;
+      elements.omrCameraStatus.className = 'scanner-status';
+      elements.omrCameraStatus.textContent = 'Cartão alinhado. Selecione o gabarito para ler as respostas.';
+      renderOmrLiveAnswers([]);
+      return;
+    }
+    const responses = window.CardOMR.readMarkedAnswers(imageData, markers, savedKey.answers.length);
+    omrCurrentResponses = responses;
+    const detectedCount = responses.filter(Boolean).length;
+    const uncertainCount = responses.length - detectedCount;
+    elements.confirmOmrReading.disabled = !studentSelected;
+    elements.omrCameraStatus.className = 'scanner-status';
+    elements.omrCameraStatus.textContent = studentSelected
+      ? `Cartão alinhado: ${detectedCount}/${responses.length} respostas reconhecidas${uncertainCount ? `; ${uncertainCount} em dúvida` : ''}.`
+      : 'Cartão alinhado. Selecione o aluno ou o modo de teste.';
+    renderOmrLiveAnswers(responses);
+  }
+
+  function renderOmrLiveAnswers(responses) {
+    const fragment = document.createDocumentFragment();
+    responses.forEach((answer, index) => {
+      const item = document.createElement('span');
+      item.className = `omr-live-answer${answer ? '' : ' uncertain'}`;
+      item.textContent = `Q${index + 1}: ${answer || '?'}`;
+      fragment.append(item);
+    });
+    elements.omrLiveAnswers.replaceChildren(fragment);
+  }
+
+  function confirmOmrReading() {
+    const savedKey = state.savedKeys.find((key) => key.id === elements.omrKeySelect.value);
+    if (!savedKey || !omrCurrentResponses) {
+      elements.omrCameraStatus.className = 'scanner-status error';
+      elements.omrCameraStatus.textContent = 'Aguarde o alinhamento do cartão e selecione um gabarito salvo.';
+      return;
+    }
+    const selectedStudentId = elements.omrStudentSelect.value;
+    const isTestCard = selectedStudentId === '__test__';
+    const student = state.students.find((record) => record.id === selectedStudentId);
+    if (!isTestCard && !student) {
+      elements.omrCameraStatus.className = 'scanner-status error';
+      elements.omrCameraStatus.textContent = 'Selecione o aluno que está fazendo a prova.';
+      return;
+    }
+    const payload = isTestCard
+      ? {
+        tipo: 'cartao-aluno',
+        teste: true,
+        aluno_id: 'teste-omr',
+        aluno: 'TESTE DE LEITURA ÓPTICA',
+        turma: 'TURMA TESTE',
+        serie: 'TESTE',
+        gabarito_id: savedKey.id
+      }
+      : {
+        tipo: 'cartao-aluno',
+        aluno_id: student.id,
+        aluno: student.name,
+        turma: getStudentClass(student),
+        serie: student.series || inferStudentSeries(student.className) || '',
+        gabarito_id: savedKey.id
+      };
+    const responses = omrCurrentResponses;
+    loadSavedKey(savedKey.id);
+    closeModal('omr-camera-modal');
+    showManualCorrection(payload, savedKey, responses);
+  }
+
+  function stopOmrCamera() {
+    if (omrCameraFrame) cancelAnimationFrame(omrCameraFrame);
+    omrCameraFrame = 0;
+    if (omrCameraStream) {
+      omrCameraStream.getTracks().forEach((track) => track.stop());
+      omrCameraStream = null;
+    }
+    elements.omrCameraVideo.srcObject = null;
+    omrCurrentMarkers = null;
+    omrCurrentResponses = null;
   }
 
   async function openScanner() {
@@ -1653,7 +1901,7 @@
     if (error && (error.name === 'NotFoundError' || error.name === 'DevicesNotFoundError')) {
       return 'Nenhuma câmera foi encontrada neste dispositivo.';
     }
-    return 'Não foi possível acessar a câmera. Verifique as permissões ou envie uma imagem do QR Code.';
+    return 'Não foi possível acessar a câmera. Verifique as permissões do navegador e tente novamente.';
   }
 
   function setScannerError(message) {
@@ -1711,9 +1959,8 @@
       if (!savedKey) {
         throw new Error('Este cartão pertence a um gabarito que não está salvo nesta conta. Selecione a mesma conta e o gabarito usado para imprimir.');
       }
-      const responses = window.CardOMR.readMarkedAnswers(imageData, decoded.location, savedKey.answers.length);
       loadSavedKey(savedKey.id);
-      showManualCorrection(payload, savedKey, responses);
+      showManualCorrection(payload, savedKey);
     } catch (error) {
       console.error('Não foi possível ler as respostas da foto do cartão.', error);
       showPhotoScanError(error.message || 'Não foi possível ler a foto do cartão. Tente novamente com boa iluminação e sem inclinar o celular.');
@@ -1727,9 +1974,10 @@
 
   function decodeCardPayload(decodedText) {
     const decodedPayload = JSON.parse(decodedText);
-    return Array.isArray(decodedPayload) && decodedPayload[0] === 'C'
+    return Array.isArray(decodedPayload) && ['C', 'T'].includes(decodedPayload[0])
       ? {
         tipo: 'cartao-aluno',
+        teste: decodedPayload[0] === 'T',
         aluno_id: decodedPayload[1],
         aluno: decodedPayload[2],
         turma: decodedPayload[3],
@@ -1747,17 +1995,7 @@
       console.error('Não foi possível encerrar a câmera após a leitura.', error);
     });
     try {
-      const decodedPayload = JSON.parse(decodedText);
-      const payload = Array.isArray(decodedPayload) && decodedPayload[0] === 'C'
-        ? {
-          tipo: 'cartao-aluno',
-          aluno_id: decodedPayload[1],
-          aluno: decodedPayload[2],
-          turma: decodedPayload[3],
-          serie: decodedPayload[4],
-          gabarito_id: decodedPayload[5]
-        }
-        : decodedPayload;
+      const payload = decodeCardPayload(decodedText);
       if (payload && payload.tipo === 'cartao-aluno') {
         const savedKey = state.savedKeys.find((key) => key.id === payload.gabarito_id);
         if (!savedKey) {
