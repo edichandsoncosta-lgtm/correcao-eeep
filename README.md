@@ -18,4 +18,5 @@ O GitHub Pages publica o site pela internet. O código-fonte deste repositório 
 
 - O login dos professores usa o Supabase configurado em `supabase-config.js`.
 - A chave `sb_publishable_...` é uma chave pública de cliente. Nunca coloque uma chave `service_role` neste projeto.
+- O QR Code dos cartões nominais identifica o aluno e a prova. A câmera ainda não lê as bolhas; o professor informa as respostas depois da leitura.
 - Alunos, gabaritos e resultados são salvos no armazenamento local do navegador. Eles não são sincronizados automaticamente entre o computador e o celular; cada aparelho mantém seus próprios dados.

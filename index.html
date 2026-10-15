@@ -5,7 +5,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="theme-color" content="#146b43">
-    <meta name="description" content="Leia QR Codes com a câmera do celular e corrija provas automaticamente.">
+    <meta name="description" content="Identifique o aluno pelo QR Code, informe as respostas e acompanhe o resultado da prova.">
     <title>Correção de provas | EEEP Luizete Albano</title>
     <link rel="icon" href="escola.jpg" type="image/jpeg">
     <link rel="stylesheet" href="style.css">
@@ -99,7 +99,7 @@
           <div>
             <p class="eyebrow">BEM-VINDO(A) À ÁREA DO PROFESSOR</p>
             <h1>Correção de provas</h1>
-            <p class="intro-copy">Configure o gabarito, leia o QR Code do cartão-resposta e veja o resultado na hora.</p>
+            <p class="intro-copy">Configure o gabarito, leia o QR Code para identificar o aluno e informe as respostas para calcular o resultado.</p>
           </div>
           <button class="button button-primary" id="scan-button" type="button">
             <span class="button-camera">▣</span> Ler QR Code
@@ -227,7 +227,10 @@
                     <p class="card-title">CARTÃO-RESPOSTA</p>
                     <p class="card-meta"><strong>Aluno:</strong> <span id="preview-student-name">Selecione um aluno</span><br><strong>Série:</strong> <span id="preview-student-series">—</span><br><strong>Turma:</strong> <span id="preview-student-class">—</span><br><strong>Prova:</strong> <span id="preview-exam-name">—</span><br><strong>Disciplina:</strong> <span id="preview-exam-discipline">—</span></p>
                   </div>
-                  <div class="card-qr preview-qr-placeholder" aria-label="QR Code será gerado ao imprimir">QR</div>
+                  <div class="card-qr-block">
+                    <div class="card-qr preview-qr-placeholder" aria-label="QR Code será gerado ao imprimir">QR</div>
+                    <span class="card-qr-caption">LEIA PARA IDENTIFICAR</span>
+                  </div>
                 </header>
                 <div class="answer-grid preview-answer-grid" id="preview-answer-grid"></div>
                 <p class="instructions">Marque uma alternativa por questão. A prévia reproduz o cartão que será impresso.</p>
@@ -246,12 +249,12 @@
               <ol class="steps-list">
                 <li><span>1</span><div><strong>Prepare o gabarito</strong><p>Marque as alternativas corretas da prova.</p></div></li>
                 <li><span>2</span><div><strong>Abra a câmera</strong><p>Toque em “Ler QR Code” e aponte para o código.</p></div></li>
-                <li><span>3</span><div><strong>Veja o resultado</strong><p>Nome, acertos e nota aparecem automaticamente.</p></div></li>
+                <li><span>3</span><div><strong>Informe as respostas</strong><p>O QR identifica aluno e prova; depois, informe as alternativas marcadas para calcular a nota.</p></div></li>
               </ol>
             </article>
             <article class="qr-note">
               <div class="qr-note-icon">▦</div>
-              <div><strong>O que precisa estar no QR Code?</strong><p>O código deve conter os dados do aluno e as respostas marcadas. Veja o formato aceito.</p>
+              <div><strong>O que o QR Code identifica?</strong><p>O QR identifica aluno e prova. As bolhas não são lidas pela câmera; as respostas ainda precisam ser informadas depois da leitura.</p>
                 <button class="text-button" id="format-button" type="button">Ver formato do QR Code <span>→</span></button>
               </div>
             </article>

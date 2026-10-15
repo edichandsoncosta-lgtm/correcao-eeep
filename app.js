@@ -488,6 +488,7 @@
     elements.previewExamName.textContent = savedKey?.examName || elements.examName.value || '—';
     elements.previewExamDiscipline.textContent =
       savedKey?.discipline || elements.examDiscipline.value.trim() || '—';
+    elements.previewAnswerGrid.classList.toggle('answer-grid-dense', answers.length > 30);
     elements.previewAnswerGrid.replaceChildren();
     answers.forEach((_, index) => {
       const row = document.createElement('div');
@@ -569,11 +570,17 @@
       identity.innerHTML = `<p class="card-school">EEEP LUIZETE ALBANO DE FREITAS MENEZES</p><p class="card-title">CARTÃO-RESPOSTA</p><p class="card-meta"><strong>Aluno:</strong> ${escapeHtml(student.name)}<br><strong>Série:</strong> ${escapeHtml(series)}<br><strong>Turma:</strong> ${escapeHtml(className)}<br><strong>Prova:</strong> ${escapeHtml(savedKey.examName)}<br><strong>Disciplina:</strong> ${escapeHtml(savedKey.discipline)}</p>`;
       const qr = document.createElement('div');
       qr.className = 'card-qr';
-      header.append(identity, qr);
+      const qrCaption = document.createElement('span');
+      qrCaption.className = 'card-qr-caption';
+      qrCaption.textContent = 'LEIA PARA IDENTIFICAR';
+      const qrBlock = document.createElement('div');
+      qrBlock.className = 'card-qr-block';
+      qrBlock.append(qr, qrCaption);
+      header.append(identity, qrBlock);
       card.append(header);
 
       const answers = document.createElement('div');
-      answers.className = 'answer-grid';
+      answers.className = `answer-grid${savedKey.answers.length > 30 ? ' answer-grid-dense' : ''}`;
       savedKey.answers.forEach((answer, questionIndex) => {
         const row = document.createElement('div');
         row.className = 'question-row';
@@ -611,8 +618,8 @@
       try {
         new window.QRCode(qr, {
           text: stringifyQrPayload(qrPayload),
-          width: 100,
-          height: 100,
+          width: 240,
+          height: 240,
           correctLevel: window.QRCode.CorrectLevel.M
         });
       } catch (error) {
