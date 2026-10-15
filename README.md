@@ -18,5 +18,7 @@ O GitHub Pages publica o site pela internet. O código-fonte deste repositório 
 
 - O login dos professores usa o Supabase configurado em `supabase-config.js`.
 - A chave `sb_publishable_...` é uma chave pública de cliente. Nunca coloque uma chave `service_role` neste projeto.
-- O QR Code dos cartões nominais identifica o aluno e a prova. A câmera ainda não lê as bolhas; o professor informa as respostas depois da leitura.
+- Nos cartões nominais, o QR Code identifica o aluno e a prova. A leitura óptica analisa uma foto do cartão completo e preenche as respostas para conferência antes de salvar; respostas apagadas, múltiplas ou incertas precisam ser revisadas pelo professor.
+- Para uma leitura melhor, imprima em tamanho real, mantenha o cartão plano, fotografe-o inteiro de cima e use boa iluminação. Cartões externos não seguem o formato calibrado para leitura óptica.
+- A foto é processada localmente no navegador e não é enviada ao servidor.
 - Alunos, gabaritos e resultados são salvos no armazenamento local do navegador. Eles não são sincronizados automaticamente entre o computador e o celular; cada aparelho mantém seus próprios dados.

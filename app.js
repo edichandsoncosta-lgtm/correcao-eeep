@@ -66,6 +66,7 @@
     answerProgress: $('#answer-progress'),
     saveKey: $('#save-key'),
     scanButton: $('#scan-button'),
+    scanQrButton: $('#scan-qr-button'),
     resultsBody: $('#results-body'),
     emptyState: $('#empty-state'),
     resultsCount: $('#results-count'),
@@ -580,7 +581,9 @@
       card.append(header);
 
       const answers = document.createElement('div');
-      answers.className = `answer-grid${savedKey.answers.length > 30 ? ' answer-grid-dense' : ''}`;
+      const answerColumns = savedKey.answers.length > 30 ? 3 : 2;
+      answers.className = `answer-grid${answerColumns === 3 ? ' answer-grid-dense' : ''}`;
+      answers.style.setProperty('--question-rows', String(Math.ceil(savedKey.answers.length / answerColumns)));
       savedKey.answers.forEach((answer, questionIndex) => {
         const row = document.createElement('div');
         row.className = 'question-row';
@@ -603,7 +606,7 @@
       card.append(answers);
       const instruction = document.createElement('p');
       instruction.className = 'instructions';
-      instruction.textContent = 'Preencha uma alternativa por questão. O QR Code identifica o aluno e a prova.';
+      instruction.textContent = 'Preencha completamente uma bolha por questão. Fotografe o cartão inteiro para corrigir.';
       card.append(instruction);
       page.append(card);
 
@@ -650,13 +653,23 @@
     );
   }
 
-  function showManualCorrection(payload, savedKey) {
+  function showManualCorrection(payload, savedKey, detectedResponses = null) {
     pendingCardCorrection = { payload, savedKey };
     const classLabel = [payload.serie, payload.turma].filter(Boolean).join(' ');
     elements.manualCorrectionDescription.textContent =
       `${payload.aluno} · ${classLabel || 'Turma não informada'} · ${savedKey.examName} — ${savedKey.discipline}`;
     elements.manualCorrectionMessage.textContent = '';
     elements.manualCorrectionMessage.classList.remove('error');
+    if (detectedResponses) {
+      const detectedCount = detectedResponses.filter(Boolean).length;
+      const reviewCount = detectedResponses.length - detectedCount;
+      elements.manualCorrectionMessage.textContent = reviewCount
+        ? `Leitura automática: ${detectedCount} respostas identificadas. ${reviewCount} ${reviewCount === 1 ? 'questão precisa' : 'questões precisam'} de conferência. Revise tudo antes de salvar.`
+        : 'Leitura automática concluída. Confira todas as respostas antes de salvar.';
+    } else {
+      elements.manualCorrectionMessage.textContent =
+        'O QR identificou o aluno, mas este modo não leu as bolhas. Informe as respostas manualmente.';
+    }
     elements.manualAnswerGrid.replaceChildren();
     savedKey.answers.forEach((_, index) => {
       const label = document.createElement('label');
@@ -672,6 +685,7 @@
         option.textContent = optionValue || 'Selecione';
         select.append(option);
       });
+      if (detectedResponses) select.value = detectedResponses[index] || '';
       label.append(question, select);
       elements.manualAnswerGrid.append(label);
     });
@@ -757,7 +771,10 @@
     });
     elements.newKey.addEventListener('click', startNewKey);
     elements.deleteKey.addEventListener('click', deleteSavedKey);
-    elements.scanButton.addEventListener('click', openScanner);
+    elements.scanButton.addEventListener('click', () => {
+      if (saveExamSettings()) elements.qrFile.click();
+    });
+    elements.scanQrButton.addEventListener('click', openScanner);
     elements.teacherStudentForm.addEventListener('submit', addTeacherStudent);
     elements.teacherStudentsBody.addEventListener('click', handleTeacherStudentAction);
     elements.cardPreviewStudent.addEventListener('change', renderCardPreview);
@@ -770,7 +787,10 @@
     $('#format-button').addEventListener('click', () => showModal('format-modal'));
     elements.exportButton.addEventListener('click', exportCsv);
     elements.clearButton.addEventListener('click', clearResults);
-    $('#upload-qr').addEventListener('click', () => elements.qrFile.click());
+    $('#upload-qr').addEventListener('click', () => {
+      elements.qrFile.click();
+      if (scanner) stopScanner();
+    });
     elements.qrFile.addEventListener('change', scanImage);
     elements.classForm.addEventListener('submit', (event) => {
       event.preventDefault();
@@ -1618,7 +1638,7 @@
         handleQrCode,
         () => {}
       );
-      elements.scannerStatus.textContent = 'Câmera ativa. Posicione o QR Code dentro da moldura.';
+      elements.scannerStatus.textContent = 'Leitor de QR ativo. Para corrigir bolhas, fotografe o cartão completo.';
     } catch (error) {
       console.error('Não foi possível iniciar a câmera.', error);
       setScannerError(cameraErrorMessage(error));
@@ -1656,24 +1676,67 @@
   async function scanImage(event) {
     const file = event.target.files && event.target.files[0];
     event.target.value = '';
-    if (!file || !window.Html5Qrcode) {
-      if (file) setScannerError('O leitor de QR Code não carregou. Verifique sua conexão com a internet.');
+    if (!file) return;
+    if (typeof window.jsQR !== 'function') {
+      showPhotoScanError('O leitor de cartões não carregou. Verifique sua conexão com a internet e recarregue a página.');
+      return;
+    }
+    if (!window.CardOMR) {
+      showPhotoScanError('O leitor das alternativas não carregou. Recarregue a página e tente novamente.');
       return;
     }
     try {
       await stopScanner();
-      scanner = new Html5Qrcode('reader', { formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE] });
-      const decoded = await scanner.scanFile(file, true);
-      handleQrCode(decoded);
-    } catch (error) {
-      console.error('Não foi possível ler o QR Code da imagem.', error);
-      setScannerError('QR Code não encontrado nessa imagem. Tente outra foto, com o código nítido e bem iluminado.');
-    } finally {
-      if (scanner) {
-        scanner.clear();
-        scanner = null;
+      elements.scannerStatus.className = 'scanner-status';
+      elements.scannerStatus.textContent = 'Analisando a foto do cartão…';
+      const bitmap = await createImageBitmap(file);
+      const scale = Math.min(1, 1800 / Math.max(bitmap.width, bitmap.height));
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.round(bitmap.width * scale);
+      canvas.height = Math.round(bitmap.height * scale);
+      const context = canvas.getContext('2d', { willReadFrequently: true });
+      if (!context) throw new Error('Não foi possível preparar a foto para leitura.');
+      context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+      bitmap.close();
+      const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+      const decoded = window.jsQR(imageData.data, imageData.width, imageData.height, {
+        inversionAttempts: 'attemptBoth'
+      });
+      if (!decoded) throw new Error('Não encontrei o QR Code. Fotografe o cartão inteiro, com o código nítido e sem cortes.');
+      const payload = decodeCardPayload(decoded.data);
+      if (!payload || payload.tipo !== 'cartao-aluno') {
+        throw new Error('A foto precisa mostrar um cartão nominal impresso pelo sistema, com QR Code.');
       }
+      const savedKey = state.savedKeys.find((key) => key.id === payload.gabarito_id);
+      if (!savedKey) {
+        throw new Error('Este cartão pertence a um gabarito que não está salvo nesta conta. Selecione a mesma conta e o gabarito usado para imprimir.');
+      }
+      const responses = window.CardOMR.readMarkedAnswers(imageData, decoded.location, savedKey.answers.length);
+      loadSavedKey(savedKey.id);
+      showManualCorrection(payload, savedKey, responses);
+    } catch (error) {
+      console.error('Não foi possível ler as respostas da foto do cartão.', error);
+      showPhotoScanError(error.message || 'Não foi possível ler a foto do cartão. Tente novamente com boa iluminação e sem inclinar o celular.');
     }
+  }
+
+  function showPhotoScanError(message) {
+    if (elements.scannerModal.hidden) showModal('scanner-modal');
+    setScannerError(message);
+  }
+
+  function decodeCardPayload(decodedText) {
+    const decodedPayload = JSON.parse(decodedText);
+    return Array.isArray(decodedPayload) && decodedPayload[0] === 'C'
+      ? {
+        tipo: 'cartao-aluno',
+        aluno_id: decodedPayload[1],
+        aluno: decodedPayload[2],
+        turma: decodedPayload[3],
+        serie: decodedPayload[4],
+        gabarito_id: decodedPayload[5]
+      }
+      : decodedPayload;
   }
 
   function handleQrCode(decodedText) {
