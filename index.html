@@ -1,0 +1,433 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <!-- Metadados, estilos e bibliotecas necessárias para as telas do sistema. -->
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#146b43">
+    <meta name="description" content="Leia QR Codes com a câmera do celular e corrija provas automaticamente.">
+    <title>Correção de provas | EEEP Luizete Albano</title>
+    <link rel="icon" href="escola.jpg" type="image/jpeg">
+    <link rel="stylesheet" href="style.css">
+    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js" defer></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
+    <script src="supabase-config.js" defer></script>
+    <script src="app.js" defer></script>
+  </head>
+  <body>
+    <!-- Tela independente de login para os professores. -->
+    <main class="auth-screen" id="login-screen">
+      <section class="auth-card" aria-labelledby="login-title">
+        <img class="auth-logo" src="escola.jpg" alt="Brasão da EEEP Luizete Albano de Freitas Menezes">
+        <p class="eyebrow">EEEP LUIZETE ALBANO</p>
+        <h1 id="login-title">Login dos professores</h1>
+        <p class="auth-description">Entre com sua conta de professor para acessar a ferramenta de correção de provas.</p>
+        <form id="login-form">
+          <label class="auth-field" for="login-email">E-mail</label>
+          <input id="login-email" name="email" type="email" autocomplete="username" placeholder="voce@escola.com" required>
+          <label class="auth-field" for="login-password">Senha</label>
+          <input id="login-password" name="password" type="password" autocomplete="current-password" placeholder="Sua senha" required>
+          <p class="auth-message" id="auth-message" role="status" aria-live="polite"></p>
+          <button class="button button-primary auth-submit" id="login-submit" type="submit">Entrar</button>
+        </form>
+        <p class="auth-help">As contas de acesso dos professores são criadas pelo administrador no Supabase.</p>
+        <a class="auth-switch" href="#administrador" id="open-admin-login">Acesso do administrador</a>
+        <div class="auth-school">ESCOLA ESTADUAL DE EDUCAÇÃO PROFISSIONAL</div>
+      </section>
+    </main>
+
+    <!-- Tela exclusiva de autenticação do administrador. -->
+    <main class="auth-screen" id="admin-login-screen" hidden>
+      <section class="auth-card" aria-labelledby="admin-login-title">
+        <img class="auth-logo" src="escola.jpg" alt="Brasão da EEEP Luizete Albano de Freitas Menezes">
+        <p class="eyebrow">EEEP LUIZETE ALBANO</p>
+        <h1 id="admin-login-title">Acesso do administrador</h1>
+        <p class="auth-description">Entre na área administrativa para cadastrar professores e organizar os cadastros escolares.</p>
+        <form id="admin-login-form">
+          <label class="auth-field" for="admin-login-email">E-mail administrativo</label>
+          <input id="admin-login-email" name="email" type="email" autocomplete="username" placeholder="E-mail do administrador" required>
+          <label class="auth-field" for="admin-login-password">Senha</label>
+          <input id="admin-login-password" name="password" type="password" autocomplete="current-password" placeholder="Sua senha" required>
+          <p class="auth-message" id="admin-auth-message" role="status" aria-live="polite"></p>
+          <button class="button button-primary auth-submit" id="admin-login-submit" type="submit">Entrar na administração</button>
+        </form>
+        <p class="auth-help">As contas de acesso dos professores são criadas previamente no Supabase; o administrador cadastra seus nomes e disciplinas nesta área.</p>
+        <a class="auth-switch" href="#professor" id="open-teacher-login">Voltar ao login dos professores</a>
+        <div class="auth-school">ESCOLA ESTADUAL DE EDUCAÇÃO PROFISSIONAL</div>
+      </section>
+    </main>
+
+    <!-- Área de trabalho do professor: gabaritos, leitura de QR Code e resultados. -->
+    <div class="app-shell" id="app-shell" hidden>
+      <aside class="sidebar">
+        <a class="school-brand" href="#" aria-label="Página inicial">
+          <img src="escola.jpg" alt="Brasão da EEEP Luizete Albano de Freitas Menezes">
+          <span class="brand-copy">
+            <strong>Correção<br>de provas</strong>
+            <small>EEEP Luizete Albano</small>
+          </span>
+        </a>
+        <div class="sidebar-label">MENU PRINCIPAL</div>
+        <nav aria-label="Menu principal">
+          <a class="nav-link active" href="#inicio"><span class="nav-icon">▦</span> Visão geral</a>
+          <a class="nav-link" href="#alunos"><span class="nav-icon">♙</span> Meus alunos</a>
+          <a class="nav-link" href="#gabarito"><span class="nav-icon">☷</span> Gabaritos salvos</a>
+          <a class="nav-link" href="#resultados"><span class="nav-icon">▤</span> Resultados</a>
+        </nav>
+        <div class="sidebar-bottom">
+          <div class="privacy-card">
+            <span class="privacy-icon">⌑</span>
+            <strong>Dados do professor</strong>
+            <p>Seus alunos, gabaritos e resultados ficam salvos neste navegador.</p>
+          </div>
+          <div class="school-caption">ESCOLA ESTADUAL DE EDUCAÇÃO PROFISSIONAL</div>
+        </div>
+      </aside>
+
+      <main class="main-content" id="inicio">
+        <header class="topbar">
+          <span class="breadcrumb">Início <span>/</span> Visão geral</span>
+          <div class="topbar-right">
+            <span class="status-dot"></span><span id="user-email">Conta conectada</span>
+            <button class="signout-button admin-access-button" id="admin-access-button" type="button">Acesso do administrador</button>
+            <button class="signout-button" id="signout-button" type="button">Sair</button>
+          </div>
+        </header>
+
+        <section class="page-intro">
+          <div>
+            <p class="eyebrow">BEM-VINDO(A) À ÁREA DO PROFESSOR</p>
+            <h1>Correção de provas</h1>
+            <p class="intro-copy">Configure o gabarito, leia o QR Code do cartão-resposta e veja o resultado na hora.</p>
+          </div>
+          <button class="button button-primary" id="scan-button" type="button">
+            <span class="button-camera">▣</span> Ler QR Code
+          </button>
+        </section>
+
+        <section class="stats-grid" aria-label="Resumo das correções">
+          <article class="stat-card">
+            <div class="stat-top"><span class="stat-icon green">▤</span><span class="stat-tag">NESTE DISPOSITIVO</span></div>
+            <strong class="stat-number" id="total-stat">0</strong>
+            <span class="stat-label">provas corrigidas</span>
+          </article>
+          <article class="stat-card">
+            <div class="stat-top"><span class="stat-icon amber">✓</span><span class="stat-tag">MÉDIA GERAL</span></div>
+            <strong class="stat-number" id="average-stat">—</strong>
+            <span class="stat-label">de aproveitamento</span>
+          </article>
+          <article class="stat-card">
+            <div class="stat-top"><span class="stat-icon blue">◎</span><span class="stat-tag">ÚLTIMA LEITURA</span></div>
+            <strong class="stat-number stat-date" id="last-stat">—</strong>
+            <span class="stat-label">data da correção</span>
+          </article>
+        </section>
+
+        <section class="panel student-roster-panel" id="alunos">
+          <div class="results-heading">
+            <div><p class="eyebrow">TURMAS E CARTÕES</p><h2>Meus alunos</h2></div>
+          </div>
+          <p class="panel-subtitle">Cadastre os alunos. Para imprimir os cartões nominais, primeiro salve um gabarito e use “Imprimir cartões” na seção Gabaritos salvos.</p>
+          <a class="student-roster-key-link" href="#gabarito">Ir para Gabaritos salvos</a>
+          <form class="student-roster-form" id="teacher-student-form">
+            <label class="field"><span>Nome completo</span><input id="teacher-student-name" type="text" maxlength="100" placeholder="Nome do aluno" required></label>
+            <label class="field"><span>Série</span><select id="teacher-student-series" required><option value="">Selecione a série</option><option value="1º ano">1º ano</option><option value="2º ano">2º ano</option><option value="3º ano">3º ano</option></select></label>
+            <label class="field"><span>Turma</span><input id="teacher-student-class" type="text" maxlength="40" placeholder="Ex.: A, Informática" required></label>
+            <div class="directory-form-actions"><button class="button button-primary" type="submit">Cadastrar aluno</button></div>
+          </form>
+          <div class="directory-table-wrap">
+            <table class="directory-table student-roster-table">
+              <thead><tr><th>ALUNO</th><th>SÉRIE</th><th>TURMA</th><th>AÇÕES</th></tr></thead>
+              <tbody id="teacher-students-body"></tbody>
+            </table>
+          </div>
+          <p class="directory-empty" id="teacher-students-empty">Nenhum aluno cadastrado ainda.</p>
+          <p class="print-hint">Os cartões usam o gabarito selecionado em “Gabaritos salvos”. Cada QR identifica o aluno e a prova; depois da leitura, o professor informa as respostas marcadas.</p>
+        </section>
+
+        <section class="content-grid">
+          <article class="panel key-panel" id="gabarito">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">ANTES DE COMEÇAR</p>
+                <h2>Configure sua prova</h2>
+                <p class="panel-subtitle">Defina as informações e marque as respostas corretas.</p>
+              </div>
+              <span class="step-badge">ETAPA 1</span>
+            </div>
+            <div class="saved-key-controls">
+              <label class="field">
+                <span>Gabaritos salvos</span>
+                <select id="saved-key-select" aria-label="Carregar um gabarito salvo">
+                  <option value="">Selecione um gabarito salvo</option>
+                </select>
+              </label>
+              <div class="saved-key-actions">
+                <button class="button button-secondary" id="new-key" type="button">Novo gabarito</button>
+                <button class="button button-danger" id="delete-key" type="button" disabled>Excluir</button>
+                <button class="button button-primary" id="print-student-cards" type="button" disabled>Imprimir cartões (4 por folha)</button>
+              </div>
+            </div>
+            <p class="saved-key-print-hint">Selecione ou salve um gabarito e cadastre os alunos em “Meus alunos”; depois, imprima aqui os cartões nominais, quatro por folha A4.</p>
+            <div class="form-grid">
+              <label class="field field-wide">
+                <span>Nome da prova</span>
+                <select id="exam-name" required>
+                  <option value="">Selecione o tipo de prova</option>
+                  <option value="Avaliação Global">Avaliação Global</option>
+                  <option value="Avaliação Parcial">Avaliação Parcial</option>
+                  <option value="Simulado ENEM">Simulado ENEM</option>
+                  <option value="Simulado SPAECE">Simulado SPAECE</option>
+                  <option value="Simulado">Simulado</option>
+                </select>
+              </label>
+              <label class="field field-wide">
+                <span>Área de conhecimento</span>
+                <select id="exam-area" required>
+                  <option value="">Selecione uma área</option>
+                  <option value="Linguagens e suas Tecnologias">Linguagens e suas Tecnologias</option>
+                  <option value="Matemática e suas Tecnologias">Matemática e suas Tecnologias</option>
+                  <option value="Ciências da Natureza e suas Tecnologias">Ciências da Natureza e suas Tecnologias</option>
+                  <option value="Ciências Humanas e Sociais Aplicadas">Ciências Humanas e Sociais Aplicadas</option>
+                  <option value="Formação Técnica e Profissional (Base Técnica)">Formação Técnica e Profissional (Base Técnica)</option>
+                </select>
+              </label>
+              <label class="field field-wide">
+                <span>Disciplina</span>
+                <input id="exam-discipline" type="text" maxlength="80" placeholder="Digite a disciplina, ex.: Biologia" required>
+              </label>
+              <label class="field">
+                <span>Turma <small>(opcional)</small></span>
+                <input id="exam-class" type="text" maxlength="40" placeholder="Ex.: 2º ano A">
+              </label>
+              <label class="field">
+                <span>Número de questões</span>
+                <select id="question-count" aria-label="Número de questões"></select>
+              </label>
+            </div>
+            <div class="answer-heading">
+              <div><h3>Gabarito</h3><span id="answer-progress">0 respostas marcadas</span></div>
+              <span class="answer-instruction">Selecione uma alternativa por questão</span>
+            </div>
+            <div class="answer-grid" id="answer-grid"></div>
+            <div class="panel-footer">
+              <p><span class="info-icon">i</span> Salve o gabarito para atualizar a prévia do cartão.</p>
+              <button class="button button-secondary" id="save-key" type="button">Salvar gabarito</button>
+            </div>
+            <section class="card-preview-panel" aria-labelledby="card-preview-title">
+              <div class="card-preview-heading">
+                <div><p class="eyebrow">PRÉVIA ANTES DE IMPRIMIR</p><h3 id="card-preview-title">Cartão-resposta nominal</h3></div>
+                <label class="field card-preview-student-field"><span>Aluno para prévia</span><select id="card-preview-student"><option value="">Cadastre um aluno</option></select></label>
+              </div>
+              <article class="answer-card card-preview" id="answer-card-preview">
+                <header class="card-header">
+                  <div class="card-identity">
+                    <p class="card-school">EEEP LUIZETE ALBANO DE FREITAS MENEZES</p>
+                    <p class="card-title">CARTÃO-RESPOSTA</p>
+                    <p class="card-meta"><strong>Aluno:</strong> <span id="preview-student-name">Selecione um aluno</span><br><strong>Série:</strong> <span id="preview-student-series">—</span><br><strong>Turma:</strong> <span id="preview-student-class">—</span><br><strong>Prova:</strong> <span id="preview-exam-name">—</span><br><strong>Disciplina:</strong> <span id="preview-exam-discipline">—</span></p>
+                  </div>
+                  <div class="card-qr preview-qr-placeholder" aria-label="QR Code será gerado ao imprimir">QR</div>
+                </header>
+                <div class="answer-grid preview-answer-grid" id="preview-answer-grid"></div>
+                <p class="instructions">Marque uma alternativa por questão. A prévia reproduz o cartão que será impresso.</p>
+              </article>
+              <div class="answer-key-preview-wrap">
+                <h4>Gabarito correto (uso do professor)</h4>
+                <div class="answer-key-preview" id="answer-key-preview"></div>
+              </div>
+            </section>
+          </article>
+
+          <aside class="side-column">
+            <article class="panel how-panel">
+              <p class="eyebrow">COMO FUNCIONA</p>
+              <h2>Corrija em 3 passos</h2>
+              <ol class="steps-list">
+                <li><span>1</span><div><strong>Prepare o gabarito</strong><p>Marque as alternativas corretas da prova.</p></div></li>
+                <li><span>2</span><div><strong>Abra a câmera</strong><p>Toque em “Ler QR Code” e aponte para o código.</p></div></li>
+                <li><span>3</span><div><strong>Veja o resultado</strong><p>Nome, acertos e nota aparecem automaticamente.</p></div></li>
+              </ol>
+            </article>
+            <article class="qr-note">
+              <div class="qr-note-icon">▦</div>
+              <div><strong>O que precisa estar no QR Code?</strong><p>O código deve conter os dados do aluno e as respostas marcadas. Veja o formato aceito.</p>
+                <button class="text-button" id="format-button" type="button">Ver formato do QR Code <span>→</span></button>
+              </div>
+            </article>
+          </aside>
+        </section>
+
+        <section class="panel results-panel" id="resultados">
+          <div class="results-heading">
+            <div><p class="eyebrow">ACOMPANHAMENTO</p><h2>Provas corrigidas</h2></div>
+            <button class="button button-export" id="export-button" type="button" disabled>↓ <span>Exportar CSV</span></button>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>ALUNO</th><th>TURMA</th><th>PROVA</th><th>ACERTOS</th><th>NOTA</th><th>DATA</th></tr></thead>
+              <tbody id="results-body"></tbody>
+            </table>
+            <div class="empty-state" id="empty-state">
+              <span class="empty-icon">▤</span><strong>Nenhuma prova corrigida ainda</strong>
+              <p>Configure o gabarito e faça a primeira leitura para ver os resultados aqui.</p>
+            </div>
+          </div>
+          <div class="results-footer"><span id="results-count">Exibindo 0 resultados</span><button class="text-button clear-button" id="clear-button" type="button" hidden>Apagar resultados</button></div>
+        </section>
+
+        <footer class="page-footer">EEEP Luizete Albano de Freitas Menezes <span>·</span> Correção simples, resultado na hora.</footer>
+      </main>
+    </div>
+
+    <!-- Área administrativa para gerenciar professores e demais cadastros escolares. -->
+    <div class="app-shell admin-shell" id="admin-shell" hidden>
+      <main class="admin-main-content">
+        <header class="topbar admin-topbar">
+          <a class="school-brand" href="#" aria-label="Área administrativa">
+            <img src="escola.jpg" alt="Brasão da EEEP Luizete Albano de Freitas Menezes">
+            <span class="brand-copy"><strong>Área administrativa</strong><small>EEEP Luizete Albano</small></span>
+          </a>
+          <div class="topbar-right">
+            <span class="status-dot"></span><span id="admin-user-email">Conta conectada</span>
+            <button class="signout-button" id="admin-signout-button" type="button">Sair</button>
+          </div>
+        </header>
+
+        <section class="panel directory-panel" id="cadastros">
+          <div class="results-heading">
+            <div><p class="eyebrow">GESTÃO ESCOLAR</p><h2>Cadastro de professores</h2></div>
+            <span class="step-badge">ÁREA ADMINISTRATIVA</span>
+          </div>
+          <p class="panel-subtitle directory-intro">Cadastre professores e áreas; depois, organize disciplinas, turmas e alunos.</p>
+          <div class="directory-status" id="directory-status" role="status" aria-live="polite"></div>
+          <div class="directory-tabs" role="tablist" aria-label="Tipo de cadastro">
+            <button class="directory-tab active" id="tab-classes" type="button" role="tab" aria-selected="true" aria-controls="pane-classes" data-directory-tab="classes">Turmas <span id="class-count">0</span></button>
+            <button class="directory-tab" id="tab-students" type="button" role="tab" aria-selected="false" aria-controls="pane-students" data-directory-tab="students">Alunos <span id="student-count">0</span></button>
+            <button class="directory-tab" id="tab-subjects" type="button" role="tab" aria-selected="false" aria-controls="pane-subjects" data-directory-tab="subjects">Disciplinas <span id="subject-count">0</span></button>
+            <button class="directory-tab" id="tab-teachers" type="button" role="tab" aria-selected="false" aria-controls="pane-teachers" data-directory-tab="teachers">Professores <span id="teacher-count">0</span></button>
+            <button class="directory-tab" id="tab-areas" type="button" role="tab" aria-selected="false" aria-controls="pane-areas" data-directory-tab="areas">Áreas <span id="area-count">0</span></button>
+          </div>
+
+          <div class="directory-pane" id="pane-classes" role="tabpanel" aria-labelledby="tab-classes">
+            <div class="default-classes-action">
+              <div><strong>Turmas dos cursos técnicos</strong><p>Adicione de uma vez as turmas de 1º, 2º e 3º anos.</p></div>
+              <button class="button button-secondary" id="add-default-classes" type="button">Adicionar 9 turmas</button>
+            </div>
+            <form class="directory-form" id="class-form">
+              <label class="field"><span>Nome da turma</span><input id="class-name" maxlength="60" placeholder="Ex.: 2º ano A" required></label>
+              <div class="directory-form-actions"><button class="button button-secondary cancel-edit" id="cancel-class-edit" type="button" hidden>Cancelar</button><button class="button button-primary" id="save-class" type="submit">Cadastrar turma</button></div>
+            </form>
+            <div class="directory-table-wrap"><table class="directory-table"><thead><tr><th>TURMA</th><th>ALUNOS</th><th>DISCIPLINAS</th><th>AÇÕES</th></tr></thead><tbody id="classes-body"></tbody></table></div>
+            <p class="directory-empty" id="classes-empty">Nenhuma turma cadastrada ainda.</p>
+          </div>
+
+          <div class="directory-pane" id="pane-students" role="tabpanel" aria-labelledby="tab-students" hidden>
+            <form class="directory-form student-form" id="student-form">
+              <label class="field"><span>Nome do aluno</span><input id="student-name" maxlength="100" placeholder="Nome completo" required></label>
+              <label class="field"><span>Matrícula</span><input id="student-enrollment" maxlength="40" placeholder="Número de matrícula" required></label>
+              <label class="field"><span>Turma</span><select id="student-class" required><option value="">Selecione uma turma</option></select></label>
+              <div class="directory-form-actions"><button class="button button-secondary cancel-edit" id="cancel-student-edit" type="button" hidden>Cancelar</button><button class="button button-primary" id="save-student" type="submit">Cadastrar aluno</button></div>
+            </form>
+            <div class="directory-table-wrap"><table class="directory-table"><thead><tr><th>ALUNO</th><th>MATRÍCULA</th><th>TURMA</th><th>AÇÕES</th></tr></thead><tbody id="students-body"></tbody></table></div>
+            <p class="directory-empty" id="students-empty">Nenhum aluno cadastrado ainda.</p>
+          </div>
+
+          <div class="directory-pane" id="pane-subjects" role="tabpanel" aria-labelledby="tab-subjects" hidden>
+            <form class="directory-form subject-form" id="subject-form">
+              <label class="field"><span>Nome da disciplina</span><input id="subject-name" maxlength="80" placeholder="Ex.: Biologia" required></label>
+              <label class="field"><span>Turma</span><select id="subject-class" required><option value="">Selecione uma turma</option></select></label>
+              <label class="field"><span>Área de conhecimento</span><select id="subject-area" required><option value="">Selecione uma área</option></select></label>
+              <label class="field"><span>Professor <small>(opcional)</small></span><select id="subject-teacher"><option value="">Sem professor atribuído</option></select></label>
+              <div class="directory-form-actions"><button class="button button-secondary cancel-edit" id="cancel-subject-edit" type="button" hidden>Cancelar</button><button class="button button-primary" id="save-subject" type="submit">Cadastrar disciplina</button></div>
+            </form>
+            <div class="directory-table-wrap"><table class="directory-table"><thead><tr><th>DISCIPLINA</th><th>TURMA</th><th>ÁREA</th><th>PROFESSOR</th><th>AÇÕES</th></tr></thead><tbody id="subjects-body"></tbody></table></div>
+            <p class="directory-empty" id="subjects-empty">Nenhuma disciplina cadastrada ainda.</p>
+          </div>
+
+          <div class="directory-pane" id="pane-teachers" role="tabpanel" aria-labelledby="tab-teachers" hidden>
+            <form class="directory-form" id="teacher-form">
+              <label class="field"><span>Nome completo do professor</span><input id="teacher-name" maxlength="100" placeholder="Nome completo" required></label>
+              <div class="teacher-assignment-field">
+                <div class="teacher-assignment-heading"><span>Disciplinas e áreas de conhecimento</span><small>Digite as disciplinas e escolha a área de cada uma.</small></div>
+                <div class="teacher-assignment-list" id="teacher-assignments"></div>
+                <button class="text-button teacher-add-assignment" id="add-teacher-assignment" type="button">+ Adicionar outra disciplina</button>
+              </div>
+              <div class="directory-form-actions"><button class="button button-secondary cancel-edit" id="cancel-teacher-edit" type="button" hidden>Cancelar</button><button class="button button-primary" id="save-teacher" type="submit">Cadastrar professor</button></div>
+            </form>
+            <div class="directory-table-wrap"><table class="directory-table"><thead><tr><th>PROFESSOR</th><th>DISCIPLINAS</th><th>ÁREAS DE CONHECIMENTO</th><th>AÇÕES</th></tr></thead><tbody id="teachers-body"></tbody></table></div>
+            <p class="directory-empty" id="teachers-empty">Nenhum professor cadastrado ainda.</p>
+          </div>
+
+          <div class="directory-pane" id="pane-areas" role="tabpanel" aria-labelledby="tab-areas" hidden>
+            <div class="default-classes-action">
+              <div><strong>Áreas de conhecimento sugeridas</strong><p>Linguagens, Matemática, Natureza, Humanas e Formação Técnica.</p></div>
+              <button class="button button-secondary" id="add-default-areas" type="button">Adicionar áreas sugeridas</button>
+            </div>
+            <form class="directory-form" id="area-form">
+              <label class="field"><span>Nome da área de conhecimento</span><input id="area-name" maxlength="100" placeholder="Ex.: Linguagens e suas Tecnologias" required></label>
+              <div class="directory-form-actions"><button class="button button-secondary cancel-edit" id="cancel-area-edit" type="button" hidden>Cancelar</button><button class="button button-primary" id="save-area" type="submit">Cadastrar área</button></div>
+            </form>
+            <div class="directory-table-wrap"><table class="directory-table"><thead><tr><th>ÁREA DE CONHECIMENTO</th><th>DISCIPLINAS VINCULADAS</th><th>AÇÕES</th></tr></thead><tbody id="areas-body"></tbody></table></div>
+            <p class="directory-empty" id="areas-empty">Nenhuma área cadastrada ainda.</p>
+          </div>
+        </section>
+        <footer class="page-footer">EEEP Luizete Albano de Freitas Menezes <span>·</span> Área administrativa</footer>
+      </main>
+    </div>
+
+    <!-- Janela de leitura do QR Code e seleção de uma imagem do cartão-resposta. -->
+    <div class="modal-backdrop" id="scanner-modal" hidden>
+      <section class="modal scanner-dialog" role="dialog" aria-modal="true" aria-labelledby="scanner-title">
+        <button class="modal-close" data-close="scanner-modal" type="button" aria-label="Fechar">×</button>
+        <p class="eyebrow">LEITURA DO CARTÃO-RESPOSTA</p>
+        <h2 id="scanner-title">Aponte para o QR Code</h2>
+        <p class="modal-description">Mantenha o código dentro da moldura. A leitura acontece automaticamente.</p>
+        <div id="reader"><div class="reader-placeholder"><span>▦</span><p>A câmera será iniciada ao abrir o leitor.</p></div></div>
+        <div class="scanner-status" id="scanner-status" role="status">Aguardando câmera…</div>
+        <div class="scanner-actions">
+          <button class="button button-secondary" id="upload-qr" type="button">Escolher imagem do QR Code</button>
+          <input id="qr-file" type="file" accept="image/*" hidden>
+        </div>
+        <p class="permission-hint">Permita o acesso à câmera quando o navegador solicitar. A câmera exige HTTPS ou localhost.</p>
+      </section>
+    </div>
+
+    <!-- Janela para informar as respostas depois de identificar o aluno pelo QR Code. -->
+    <div class="modal-backdrop" id="manual-correction-modal" hidden>
+      <section class="modal manual-correction-dialog" role="dialog" aria-modal="true" aria-labelledby="manual-correction-title">
+        <button class="modal-close" data-close="manual-correction-modal" type="button" aria-label="Fechar">×</button>
+        <p class="eyebrow">RESPOSTAS DO CARTÃO</p>
+        <h2 id="manual-correction-title">Corrigir prova</h2>
+        <p class="modal-description" id="manual-correction-description"></p>
+        <form id="manual-correction-form">
+          <div class="manual-answer-grid" id="manual-answer-grid"></div>
+          <p class="auth-message" id="manual-correction-message" role="status" aria-live="polite"></p>
+          <button class="button button-primary modal-done" type="submit">Corrigir e salvar resultado</button>
+        </form>
+      </section>
+    </div>
+
+    <!-- Janela com o padrão de dados esperado no QR Code. -->
+    <div class="modal-backdrop" id="format-modal" hidden>
+      <section class="modal format-dialog" role="dialog" aria-modal="true" aria-labelledby="format-title">
+        <button class="modal-close" data-close="format-modal" type="button" aria-label="Fechar">×</button>
+        <p class="eyebrow">PADRÃO DO CARTÃO-RESPOSTA</p>
+        <h2 id="format-title">Formato esperado no QR Code</h2>
+        <p class="modal-description">É possível usar um QR Code externo com aluno e respostas, ou imprimir os cartões nominais do sistema. O QR do cartão impresso identifica o aluno e a prova; depois da leitura, o professor informa as respostas.</p>
+        <pre class="code-example"><code>{
+  "aluno": "Maria Silva",
+  "turma": "2º ano A",
+  "prova": "Avaliação de Biologia",
+  "respostas": ["A", "C", "B", "D", "E"]
+}</code></pre>
+        <p class="format-footnote">Para QR Codes externos, use alternativas A, B, C, D ou E e a mesma quantidade de respostas do gabarito. Nos cartões nominais, as respostas são digitadas pelo professor após a leitura.</p>
+        <button class="button button-primary modal-done" data-close="format-modal" type="button">Entendi</button>
+      </section>
+    </div>
+
+    <!-- Avisos temporários exibidos durante as ações do sistema. -->
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    <main id="print-root" aria-hidden="true"></main>
+  </body>
+</html>
