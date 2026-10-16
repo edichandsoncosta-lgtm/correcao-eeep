@@ -49,10 +49,14 @@
         const boxWidth = maxX - minX + 1;
         const boxHeight = maxY - minY + 1;
         const fillRatio = area / (boxWidth * boxHeight);
+        const centerX = (minX + maxX) / 2;
+        const centerY = (minY + maxY) / 2;
+        const distanceToEdge = Math.min(centerX, width - centerX, centerY, height - centerY);
+        const nearCorner = distanceToEdge <= Math.min(width, height) * 0.18;
         if (boxWidth < minimumSize || boxHeight < minimumSize ||
             boxWidth > maximumSize || boxHeight > maximumSize ||
             boxWidth / boxHeight < 0.78 || boxWidth / boxHeight > 1.28 ||
-            fillRatio < 0.72) continue;
+            fillRatio < 0.72 || !nearCorner) continue;
         candidates.push({
           x: (minX + maxX) / 2,
           y: (minY + maxY) / 2,
@@ -97,18 +101,18 @@
     const columnCount = questionCount > 30 ? 3 : 2;
     const rowCount = Math.ceil(questionCount / columnCount);
     const borderMm = 25.4 / 96;
-    const paddingMm = 4;
+    const paddingMm = 2.3;
     const headerHeightMm = 39;
     const gridContentHeightMm = CARD_HEIGHT_MM - 2 * borderMm - 2 * paddingMm -
       headerHeightMm - 6 - 4;
     const contentWidthMm = CARD_WIDTH_MM - 2 * borderMm - 2 * paddingMm;
-    const columnGapMm = columnCount === 3 ? 1.5 : 3;
+    const columnGapMm = columnCount === 3 ? 1.5 : 2.4;
     const rowGapMm = columnCount === 3 ? 0.7 : 1.2;
     const cellWidthMm = (contentWidthMm - columnGapMm * (columnCount - 1)) / columnCount;
     const numberWidthMm = columnCount === 3 ? 4.5 : 6;
-    const answerGapMm = columnCount === 3 ? 0.25 : 0.6;
+    const answerGapMm = columnCount === 3 ? 0.25 : 0.7;
     const bubbleDiameterMm = columnCount === 3 ? 2.8 : 4;
-    const optionWidthMm = (cellWidthMm - numberWidthMm - answerGapMm * 5) / 5;
+    const optionWidthMm = (cellWidthMm - numberWidthMm - answerGapMm * 6) / 5;
     const trackHeightMm = (gridContentHeightMm - rowGapMm * (rowCount - 1)) / rowCount;
     const gridContentTopMm = borderMm + paddingMm + headerHeightMm + 2;
     const answers = [];
@@ -126,13 +130,20 @@
         const point = projectCardPoint(transform, xMm, yMm);
         const nextPoint = projectCardPoint(transform, xMm + 0.5, yMm);
         const localScale = distance(point, nextPoint) / 0.5;
-        scores.push(getInkScore(imageData, point.x, point.y, localScale, bubbleDiameterMm));
+        scores.push({
+          score: getInkScore(imageData, point.x, point.y, localScale, bubbleDiameterMm),
+          index: optionIndex
+        });
       }
-      const markedOptions = scores
-        .map((score, index) => ({ score, index }))
-        .filter((entry) => entry.score >= 0.24)
+
+      const sortedScores = scores
+        .slice()
         .sort((left, right) => right.score - left.score);
-      answers.push(markedOptions.length === 1 ? OPTIONS[markedOptions[0].index + 1] : '');
+      const best = sortedScores[0];
+      const secondBest = sortedScores[1] || { score: -Infinity };
+      const hasSelection = best && best.score >= 0.15 && best.score >= secondBest.score + 0.04;
+
+      answers.push(hasSelection ? OPTIONS[best.index + 1] : '');
     }
     return answers;
   }
@@ -187,26 +198,45 @@
 
   function solveLinearSystem(matrix) {
     const size = matrix.length;
-    for (let column = 0; column < size; column += 1) {
-      let pivot = column;
-      for (let row = column + 1; row < size; row += 1) {
-        if (Math.abs(matrix[row][column]) > Math.abs(matrix[pivot][column])) pivot = row;
+    const rhsIndex = matrix[0].length - 1;
+    const pivotColumns = [];
+    let pivotRow = 0;
+
+    for (let column = 0; column < size && pivotRow < size; column += 1) {
+      let bestRow = pivotRow;
+      for (let row = pivotRow + 1; row < size; row += 1) {
+        if (Math.abs(matrix[row][column]) > Math.abs(matrix[bestRow][column])) bestRow = row;
       }
-      if (Math.abs(matrix[pivot][column]) < 1e-8) {
-        throw new Error('As marcas de alinhamento do cartão não foram reconhecidas.');
+      if (Math.abs(matrix[bestRow][column]) < 1e-8) continue;
+      if (bestRow !== pivotRow) {
+        [matrix[pivotRow], matrix[bestRow]] = [matrix[bestRow], matrix[pivotRow]];
       }
-      [matrix[column], matrix[pivot]] = [matrix[pivot], matrix[column]];
-      const divisor = matrix[column][column];
-      for (let entry = column; entry <= size; entry += 1) matrix[column][entry] /= divisor;
+      const divisor = matrix[pivotRow][column];
+      for (let entry = column; entry <= rhsIndex; entry += 1) {
+        matrix[pivotRow][entry] /= divisor;
+      }
       for (let row = 0; row < size; row += 1) {
-        if (row === column) continue;
+        if (row === pivotRow) continue;
         const factor = matrix[row][column];
-        for (let entry = column; entry <= size; entry += 1) {
-          matrix[row][entry] -= factor * matrix[column][entry];
+        if (Math.abs(factor) < 1e-8) continue;
+        for (let entry = column; entry <= rhsIndex; entry += 1) {
+          matrix[row][entry] -= factor * matrix[pivotRow][entry];
         }
       }
+      pivotColumns.push(column);
+      pivotRow += 1;
     }
-    return matrix.map((row) => row[size]);
+
+    if (pivotRow < size) {
+      throw new Error('As marcas de alinhamento do cartão não foram reconhecidas.');
+    }
+
+    const solution = new Array(size).fill(0);
+    for (let row = 0; row < size; row += 1) {
+      const column = pivotColumns[row];
+      solution[column] = matrix[row][rhsIndex];
+    }
+    return solution;
   }
 
   function projectCardPoint(transform, x, y) {
@@ -218,7 +248,7 @@
   }
 
   function getInkScore(imageData, centerX, centerY, pixelsPerMm, bubbleDiameterMm) {
-    const radius = Math.max(1, pixelsPerMm * Math.min(0.95, bubbleDiameterMm * 0.27));
+    const radius = Math.max(2.5, pixelsPerMm * Math.min(1.15, bubbleDiameterMm * 0.34));
     let darkPixels = 0;
     let samples = 0;
     for (let y = Math.floor(centerY - radius); y <= Math.ceil(centerY + radius); y += 1) {
@@ -228,7 +258,7 @@
         const pixel = (y * imageData.width + x) * 4;
         const luminance = 0.299 * imageData.data[pixel] +
           0.587 * imageData.data[pixel + 1] + 0.114 * imageData.data[pixel + 2];
-        if (luminance < 185) darkPixels += 1;
+        if (luminance < 190) darkPixels += 1;
         samples += 1;
       }
     }

@@ -326,37 +326,79 @@ td:first-child { color: #34483b; font-weight: 600; }
   body { background: #fff; color: #111; font: 8pt Arial, sans-serif; margin: 0; }
   body > :not(#print-root) { display: none !important; }
   #print-root { display: block !important; }
-  .print-page { align-content: center; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: repeat(2, 137mm); gap: 5mm; justify-content: center; margin: 0 auto; max-width: 194mm; page-break-after: always; width: 100%; }
+  .print-page {
+    align-content: center;
+    display: grid;
+    gap: 4mm;
+    grid-template-columns: repeat(2, 94.5mm);
+    grid-template-rows: repeat(2, 137mm);
+    justify-content: center;
+    margin: 0 auto;
+    max-width: 194mm;
+    page-break-after: always;
+    width: 100%;
+  }
   .print-page:last-child { page-break-after: auto; }
-  .answer-card { border: 1px solid #555; border-radius: 2mm; display: flex; flex-direction: column; height: 137mm; overflow: hidden; padding: 4mm; position: relative; width: 100%; }
-  .card-marker { height: 3mm; position: absolute; width: 3mm; z-index: 1; }
-  .card-marker-top-left { left: .9mm; top: .9mm; }
-  .card-marker-top-right { right: .9mm; top: .9mm; }
-  .card-marker-bottom-right { bottom: .9mm; right: .9mm; }
-  .card-marker-bottom-left { bottom: .9mm; left: .9mm; }
+  .answer-card {
+    border: 1px solid #555;
+    border-radius: 2mm;
+    display: flex;
+    flex-direction: column;
+    height: 137mm;
+    overflow: hidden;
+    padding: 2.3mm;
+    position: relative;
+    width: 94.5mm;
+  }
+  .card-marker { height: 2.3mm; position: absolute; width: 2.3mm; z-index: 1; }
+  .card-marker-top-left { left: 2.3mm; top: 2.3mm; }
+  .card-marker-top-right { right: 2.3mm; top: 2.3mm; }
+  .card-marker-bottom-right { bottom: 2.3mm; right: 2.3mm; }
+  .card-marker-bottom-left { bottom: 2.3mm; left: 2.3mm; }
   .card-header { align-items: center; border-bottom: 1px solid #bbb; display: flex; flex: 0 0 39mm; gap: 3mm; height: 39mm; justify-content: space-between; min-height: 39mm; }
   .card-identity { min-width: 0; }
   .card-school { color: #111; font-size: 7pt; letter-spacing: 0; margin: 0 0 1mm; }
   .card-title { font-size: 10pt; font-weight: bold; margin: 0 0 1.5mm; }
   .card-meta { font-size: 7pt; line-height: 1.55; margin: 0; overflow-wrap: anywhere; }
-  .print-page .answer-grid { align-content: stretch; align-items: center; display: grid; flex: 1; gap: 1.2mm 3mm; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: repeat(var(--question-rows), minmax(0, 1fr)); min-height: 0; padding: 2mm 0; }
-  .question-row { align-items: center; display: grid; font-size: 7pt; gap: .6mm; grid-template-columns: 6mm repeat(5, minmax(0, 1fr)); white-space: nowrap; }
+  .print-page .answer-grid {
+    align-content: stretch;
+    align-items: center;
+    display: grid;
+    flex: 1;
+    gap: 1.2mm 2.4mm;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-rows: repeat(var(--question-rows), minmax(0, 1fr));
+    min-height: 0;
+    padding: 2mm 0;
+  }
+  .question-row {
+    align-items: center;
+    display: grid;
+    font-size: 6.8pt;
+    gap: .7mm;
+    grid-template-columns: 6mm repeat(5, minmax(0, 1fr));
+    white-space: nowrap;
+  }
   .question-number { background: #f1f3f1; border-radius: 1mm; font-size: 6.5pt; font-weight: bold; min-width: 0; padding: .5mm 0; text-align: center; }
-  .choice { align-items: center; display: inline-flex; gap: .35mm; justify-content: center; }
-  .bubble { border: .4mm solid #111; border-radius: 50%; display: inline-block; flex: 0 0 4mm; height: 4mm; width: 4mm; }
+  .choice { align-items: center; display: inline-flex; gap: .4mm; justify-content: center; }
+  .bubble {
+    border: .35mm solid #111;
+    border-radius: 50%;
+    display: inline-block;
+    flex: 0 0 4mm;
+    height: 4mm;
+    width: 4mm;
+  }
   .answer-grid-dense { gap: .7mm 1.5mm !important; grid-template-columns: repeat(3, minmax(0, 1fr)) !important; }
-  .answer-grid-dense .question-row { font-size: 5.6pt; gap: .25mm; grid-template-columns: 4.5mm repeat(5, minmax(0, 1fr)); }
+  .answer-grid-dense .question-row { font-size: 5.5pt; gap: .25mm; grid-template-columns: 4.5mm repeat(5, minmax(0, 1fr)); }
   .answer-grid-dense .question-number { font-size: 5pt; }
   .answer-grid-dense .bubble { border-width: .3mm; flex-basis: 2.8mm; height: 2.8mm; width: 2.8mm; }
-  .instructions { border-top: 1px solid #bbb; flex: 0 0 5mm; font-size: 6pt; height: 5mm; margin: 1mm 0 0; padding-top: 1mm; }
+  .instructions { border-top: 1px solid #bbb; flex: 0 0 5mm; font-size: 6pt; height: 5mm; margin: 1mm 0 0; padding: 1mm 2.5mm 0; }
 }
 
 /* Ajustes progressivos para telas grandes, tablets e celulares. */
 @media (min-width: 1440px) {
   .main-content { margin-left: 244px; padding-left: 55px; padding-right: 55px; }
-}
-@media (min-width: 1200px) {
-  .preview-answer-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
 @media (max-width: 1020px) {
   .main-content { padding-left: 25px; padding-right: 25px; }

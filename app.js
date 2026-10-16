@@ -562,8 +562,15 @@
     markers.className = 'card-markers';
     markers.setAttribute('aria-hidden', 'true');
     ['top-left', 'top-right', 'bottom-right', 'bottom-left'].forEach((position) => {
-      const marker = document.createElement('span');
-      marker.className = `card-marker card-marker-${position}`;
+      const marker = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      marker.setAttribute('class', `card-marker card-marker-${position}`);
+      marker.setAttribute('viewBox', '0 0 100 100');
+      marker.setAttribute('focusable', 'false');
+      const square = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+      square.setAttribute('width', '100');
+      square.setAttribute('height', '100');
+      square.setAttribute('fill', '#111');
+      marker.append(square);
       markers.append(marker);
     });
     card.append(markers);
@@ -605,7 +612,7 @@
     instruction.className = 'instructions';
     instruction.textContent = isTestCard
       ? 'TESTE: preencha A, B, C, D, E nessa ordem e repita. Marque bem uma bolha por questão.'
-      : 'Preencha completamente uma bolha por questão. Alinhe os quatro quadrados com a câmera para corrigir.';
+      : 'Preencha uma bolha por questão. Alinhe os quatro marcadores com a câmera.';
     card.append(instruction);
 
     return card;
