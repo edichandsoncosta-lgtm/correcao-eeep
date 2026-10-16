@@ -2,13 +2,13 @@
   const OPTIONS = ['', 'A', 'B', 'C', 'D', 'E'];
   const CARD_WIDTH_MM = 94.5;
   const CARD_HEIGHT_MM = 137;
-  const MARKER_OFFSET_MM = 2.3;
+  const MARKER_OFFSET_MM = 25.4 / 96 + 2.3 + 1.15;
 
   function findCardMarkers(imageData) {
     const { width, height, data } = imageData;
     const visited = new Uint8Array(width * height);
     const candidates = [];
-    const minimumSize = Math.max(6, Math.min(width, height) * 0.012);
+    const minimumSize = Math.max(3, Math.min(width, height) * 0.004);
     const maximumSize = Math.min(width, height) * 0.07;
     const stack = [];
 
@@ -52,7 +52,7 @@
         const centerX = (minX + maxX) / 2;
         const centerY = (minY + maxY) / 2;
         const distanceToEdge = Math.min(centerX, width - centerX, centerY, height - centerY);
-        const nearCorner = distanceToEdge <= Math.min(width, height) * 0.18;
+        const nearCorner = distanceToEdge <= Math.min(width, height) * 0.4;
         if (boxWidth < minimumSize || boxHeight < minimumSize ||
             boxWidth > maximumSize || boxHeight > maximumSize ||
             boxWidth / boxHeight < 0.78 || boxWidth / boxHeight > 1.28 ||
@@ -112,6 +112,13 @@
     const numberWidthMm = columnCount === 3 ? 4.5 : 6;
     const answerGapMm = columnCount === 3 ? 0.25 : 0.7;
     const bubbleDiameterMm = columnCount === 3 ? 2.8 : 4;
+    const fontSizePt = columnCount === 3 ? 5.5 : 6.8;
+    const measurementContext = document.createElement('canvas').getContext('2d');
+    if (!measurementContext) throw new Error('Não foi possível medir as alternativas do cartão.');
+    measurementContext.font = `${fontSizePt}pt Arial`;
+    const optionLabelWidthsMm = OPTIONS.slice(1).map((option) =>
+      measurementContext.measureText(option).width * 25.4 / 96
+    );
     const optionWidthMm = (cellWidthMm - numberWidthMm - answerGapMm * 6) / 5;
     const trackHeightMm = (gridContentHeightMm - rowGapMm * (rowCount - 1)) / rowCount;
     const gridContentTopMm = borderMm + paddingMm + headerHeightMm + 2;
@@ -123,8 +130,11 @@
       const rowOffsetMm = trackHeightMm * (row + 0.5) + rowGapMm * row;
       const scores = [];
       for (let optionIndex = 0; optionIndex < 5; optionIndex += 1) {
+        const choiceContentWidthMm = bubbleDiameterMm + 0.4 + optionLabelWidthsMm[optionIndex];
+        const choiceAlignmentOffsetMm = (optionWidthMm - choiceContentWidthMm) / 2;
         const optionOffsetMm = numberWidthMm + answerGapMm +
-          optionWidthMm * optionIndex + answerGapMm * optionIndex + bubbleDiameterMm / 2;
+          optionWidthMm * optionIndex + answerGapMm * optionIndex +
+          choiceAlignmentOffsetMm + bubbleDiameterMm / 2;
         const xMm = borderMm + paddingMm + column * (cellWidthMm + columnGapMm) + optionOffsetMm;
         const yMm = gridContentTopMm + rowOffsetMm;
         const point = projectCardPoint(transform, xMm, yMm);

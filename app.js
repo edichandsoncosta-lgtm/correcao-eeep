@@ -1735,7 +1735,12 @@
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: false,
-        video: { facingMode: { ideal: 'environment' } }
+        video: {
+          facingMode: { ideal: 'environment' },
+          width: { ideal: 1920 },
+          height: { ideal: 1080 },
+          frameRate: { ideal: 30, max: 30 }
+        }
       });
       if (elements.omrCameraModal.hidden) {
         stream.getTracks().forEach((track) => track.stop());
@@ -1745,7 +1750,7 @@
       elements.omrCameraVideo.srcObject = omrCameraStream;
       await elements.omrCameraVideo.play();
       elements.omrCameraStatus.textContent =
-        'Câmera ativa. Enquadre o cartão inteiro e mantenha os quatro quadrados visíveis.';
+        'Câmera ativa. Mantenha o cartão inteiro dentro da guia, com boa iluminação e sem inclinar.';
       omrLastFrameTime = 0;
       omrCameraFrame = requestAnimationFrame(scanOmrCameraFrame);
     } catch (error) {
@@ -1762,7 +1767,7 @@
       try {
         const video = elements.omrCameraVideo;
         if (video.videoWidth && video.videoHeight) {
-          const scale = Math.min(1, 800 / Math.max(video.videoWidth, video.videoHeight));
+          const scale = Math.min(1, 1280 / Math.max(video.videoWidth, video.videoHeight));
           if (!omrCanvas) omrCanvas = document.createElement('canvas');
           omrCanvas.width = Math.round(video.videoWidth * scale);
           omrCanvas.height = Math.round(video.videoHeight * scale);
@@ -1790,7 +1795,8 @@
       omrCurrentResponses = null;
       elements.confirmOmrReading.disabled = true;
       elements.omrCameraStatus.className = 'scanner-status';
-      elements.omrCameraStatus.textContent = 'Enquadre o cartão inteiro. Os quatro quadrados dos cantos precisam aparecer.';
+      elements.omrCameraStatus.textContent =
+        'Cartão não detectado. Mantenha os quatro marcadores visíveis dentro da guia e ajuste a distância.';
       renderOmrLiveAnswers([]);
       return;
     }
