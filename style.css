@@ -70,6 +70,8 @@ button { cursor: pointer; }
 .topbar { align-items: center; border-bottom: 1px solid var(--border); color: #849088; display: flex; font-size: 10px; height: 55px; justify-content: space-between; }
 .breadcrumb span { color: #c3cbc6; margin: 0 8px; }
 .topbar-right { align-items: center; display: flex; gap: 7px; }
+.workspace-sync-status { color: #718077; font-size: 9px; }
+.workspace-sync-status.error { color: #a94a3e; }
 .signout-button { background: transparent; border: 0; border-left: 1px solid #e7ece8; color: #6d7b72; font-size: 9px; margin-left: 5px; padding: 3px 0 3px 10px; }
 .signout-button:hover { color: #a94a3e; }
 .signout-button:disabled { cursor: wait; opacity: .6; }
@@ -350,7 +352,7 @@ td:first-child { color: #34483b; font-weight: 600; }
     position: relative;
     width: 94.5mm;
   }
-  .card-marker { height: 2.3mm; position: absolute; width: 2.3mm; z-index: 1; }
+  .card-marker { height: 3.5mm; position: absolute; width: 3.5mm; z-index: 1; }
   .card-marker-top-left { left: 2.3mm; top: 2.3mm; }
   .card-marker-top-right { right: 2.3mm; top: 2.3mm; }
   .card-marker-bottom-right { bottom: 2.3mm; right: 2.3mm; }
@@ -414,6 +416,7 @@ td:first-child { color: #34483b; font-weight: 600; }
   .omr-camera-dialog { padding: 21px 17px; }
   .omr-camera-fields { grid-template-columns: minmax(0, 1fr); }
   .omr-camera-view { height: min(40vh, 340px); min-height: 205px; }
+  .topbar-right { flex-wrap: wrap; justify-content: flex-end; }
   .admin-main-content { padding: 0 17px 22px; }
   .admin-topbar { height: 59px; }
   .admin-topbar .school-brand img { height: 38px; width: 38px; }
@@ -424,7 +427,7 @@ td:first-child { color: #34483b; font-weight: 600; }
   .brand-copy small { font-size: 9px; }
   .sidebar-label, .sidebar nav, .sidebar-bottom { display: none; }
   .main-content { margin: 59px 0 0; padding: 0 17px 22px; }
-  .topbar { height: 43px; }
+  .topbar { height: auto; min-height: 43px; padding: 7px 0; }
   .topbar-right { gap: 5px; }
   .admin-access-button { border-left: 0; margin-left: 0; padding-left: 0; }
   .page-intro { align-items: flex-start; gap: 14px; padding: 23px 0 18px; }

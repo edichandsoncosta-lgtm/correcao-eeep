@@ -2,20 +2,21 @@
   const OPTIONS = ['', 'A', 'B', 'C', 'D', 'E'];
   const CARD_WIDTH_MM = 94.5;
   const CARD_HEIGHT_MM = 137;
-  const MARKER_OFFSET_MM = 25.4 / 96 + 2.3 + 1.15;
+  const MARKER_SIZE_MM = 3.5;
+  const MARKER_OFFSET_MM = 25.4 / 96 + 2.3 + MARKER_SIZE_MM / 2;
 
   function findCardMarkers(imageData) {
     const { width, height, data } = imageData;
     const visited = new Uint8Array(width * height);
     const candidates = [];
-    const minimumSize = Math.max(3, Math.min(width, height) * 0.004);
+    const minimumSize = Math.max(2, Math.min(width, height) * 0.003);
     const maximumSize = Math.min(width, height) * 0.07;
     const stack = [];
 
     for (let startY = 0; startY < height; startY += 1) {
       for (let startX = 0; startX < width; startX += 1) {
         const start = startY * width + startX;
-        if (visited[start] || luminanceAt(data, start) > 75) continue;
+        if (visited[start] || luminanceAt(data, start) > 125) continue;
         visited[start] = 1;
         stack.push(start);
         let minX = startX;
@@ -37,10 +38,14 @@
             x > 0 ? pixel - 1 : -1,
             x + 1 < width ? pixel + 1 : -1,
             y > 0 ? pixel - width : -1,
-            y + 1 < height ? pixel + width : -1
+            y + 1 < height ? pixel + width : -1,
+            x > 0 && y > 0 ? pixel - width - 1 : -1,
+            x + 1 < width && y > 0 ? pixel - width + 1 : -1,
+            x > 0 && y + 1 < height ? pixel + width - 1 : -1,
+            x + 1 < width && y + 1 < height ? pixel + width + 1 : -1
           ];
           neighbors.forEach((neighbor) => {
-            if (neighbor < 0 || visited[neighbor] || luminanceAt(data, neighbor) > 75) return;
+            if (neighbor < 0 || visited[neighbor] || luminanceAt(data, neighbor) > 125) return;
             visited[neighbor] = 1;
             stack.push(neighbor);
           });
@@ -55,8 +60,8 @@
         const nearCorner = distanceToEdge <= Math.min(width, height) * 0.4;
         if (boxWidth < minimumSize || boxHeight < minimumSize ||
             boxWidth > maximumSize || boxHeight > maximumSize ||
-            boxWidth / boxHeight < 0.78 || boxWidth / boxHeight > 1.28 ||
-            fillRatio < 0.72 || !nearCorner) continue;
+            boxWidth / boxHeight < 0.55 || boxWidth / boxHeight > 1.8 ||
+            fillRatio < 0.42 || !nearCorner) continue;
         candidates.push({
           x: (minX + maxX) / 2,
           y: (minY + maxY) / 2,

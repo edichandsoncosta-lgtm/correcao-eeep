@@ -53,9 +53,17 @@ create table if not exists public.subjects (
     references public.classes(id, user_id) on delete restrict
 );
 
+create table if not exists public.teacher_workspaces (
+  user_id uuid primary key references auth.users(id) on delete cascade,
+  state jsonb not null default '{}'::jsonb,
+  revision integer not null default 1 check (revision > 0),
+  updated_at timestamptz not null default now()
+);
+
 alter table public.subjects add column if not exists area_id uuid;
 alter table public.subjects add column if not exists teacher_id uuid;
 alter table public.subjects alter column class_id drop not null;
+alter table public.teacher_workspaces add column if not exists revision integer not null default 1;
 
 do $$
 begin
@@ -83,6 +91,7 @@ alter table public.students enable row level security;
 alter table public.teachers enable row level security;
 alter table public.knowledge_areas enable row level security;
 alter table public.subjects enable row level security;
+alter table public.teacher_workspaces enable row level security;
 
 drop policy if exists "Users manage their own classes" on public.classes;
 create policy "Users manage their own classes" on public.classes
@@ -121,4 +130,10 @@ create policy "Users manage their own subjects" on public.subjects
   using (auth.uid() = user_id)
   with check (auth.uid() = user_id);
 
-grant select, insert, update, delete on public.classes, public.students, public.teachers, public.knowledge_areas, public.subjects to authenticated;
+drop policy if exists "Users manage their own workspaces" on public.teacher_workspaces;
+create policy "Users manage their own workspaces" on public.teacher_workspaces
+  for all to authenticated
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
+
+grant select, insert, update, delete on public.classes, public.students, public.teachers, public.knowledge_areas, public.subjects, public.teacher_workspaces to authenticated;

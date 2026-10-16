@@ -19,6 +19,7 @@
   const $ = (selector) => document.querySelector(selector);
   const elements = {
     loginScreen: $('#login-screen'),
+    workspaceSyncStatus: $('#workspace-sync-status'),
     adminLoginScreen: $('#admin-login-screen'),
     appShell: $('#app-shell'),
     adminShell: $('#admin-shell'),
@@ -157,6 +158,14 @@
   let activeUserIsAdmin = false;
   let loginScreenAfterSignOut = 'teacher';
   let activeStorageKey = STORAGE_KEY;
+  let syncMetadataKey = '';
+  let workspaceRevision = null;
+  let workspaceSyncRequested = 0;
+  let workspaceSyncCompleted = 0;
+  let workspaceSyncRunning = false;
+  let workspaceSyncTimer = 0;
+  let activationSequence = 0;
+  let workspaceSyncErrorShown = false;
   let appInitialized = false;
   let pendingCardCorrection = null;
   let directory = { classes: [], students: [], subjects: [], teachers: [], areas: [] };
@@ -165,21 +174,81 @@
   function loadState() {
     try {
       const saved = JSON.parse(localStorage.getItem(activeStorageKey) || '{}');
-      return {
-        examName: typeof saved.examName === 'string' ? saved.examName : '',
-        examArea: typeof saved.examArea === 'string' ? saved.examArea : '',
-        examDiscipline: typeof saved.examDiscipline === 'string' ? saved.examDiscipline : '',
-        examClass: typeof saved.examClass === 'string' ? saved.examClass : '',
-        students: Array.isArray(saved.students) ? saved.students.filter(isValidRosterStudent) : [],
-        answers: Array.isArray(saved.answers) ? saved.answers.filter((answer) => OPTIONS.includes(answer)) : [],
-        savedKeys: Array.isArray(saved.savedKeys) ? saved.savedKeys.filter(isValidSavedKey) : [],
-        selectedKeyId: typeof saved.selectedKeyId === 'string' ? saved.selectedKeyId : '',
-        results: Array.isArray(saved.results) ? saved.results.filter(isValidResult) : []
-      };
+      return normalizeState(saved);
     } catch (error) {
       console.error('Não foi possível carregar os dados salvos.', error);
-      return { examName: '', examArea: '', examDiscipline: '', examClass: '', students: [], answers: [], savedKeys: [], selectedKeyId: '', results: [] };
+      return createEmptyState();
     }
+  }
+
+  function createEmptyState() {
+    return { examName: '', examArea: '', examDiscipline: '', examClass: '', students: [], answers: [], savedKeys: [], selectedKeyId: '', results: [] };
+  }
+
+  function normalizeState(saved) {
+    return {
+      examName: typeof saved?.examName === 'string' ? saved.examName : '',
+      examArea: typeof saved?.examArea === 'string' ? saved.examArea : '',
+      examDiscipline: typeof saved?.examDiscipline === 'string' ? saved.examDiscipline : '',
+      examClass: typeof saved?.examClass === 'string' ? saved.examClass : '',
+      students: Array.isArray(saved?.students) ? saved.students.filter(isValidRosterStudent) : [],
+      answers: Array.isArray(saved?.answers) ? saved.answers.filter((answer) => OPTIONS.includes(answer)) : [],
+      savedKeys: Array.isArray(saved?.savedKeys) ? saved.savedKeys.filter(isValidSavedKey) : [],
+      selectedKeyId: typeof saved?.selectedKeyId === 'string' ? saved.selectedKeyId : '',
+      results: Array.isArray(saved?.results) ? saved.results.filter(isValidResult) : []
+    };
+  }
+
+  function mergeWorkspaceStates(localState, remoteState) {
+    const mergeById = (localRecords, remoteRecords) => {
+      const records = new Map(localRecords.map((record) => [record.id, record]));
+      remoteRecords.forEach((record) => records.set(record.id, record));
+      return [...records.values()];
+    };
+    const savedKeys = mergeById(localState.savedKeys, remoteState.savedKeys);
+    const selectedKeyId = remoteState.selectedKeyId || localState.selectedKeyId;
+    return {
+      examName: remoteState.examName || localState.examName,
+      examArea: remoteState.examArea || localState.examArea,
+      examDiscipline: remoteState.examDiscipline || localState.examDiscipline,
+      examClass: remoteState.examClass || localState.examClass,
+      students: mergeById(localState.students, remoteState.students),
+      answers: remoteState.answers.length ? remoteState.answers : localState.answers,
+      savedKeys,
+      selectedKeyId: savedKeys.some((key) => key.id === selectedKeyId)
+        ? selectedKeyId
+        : (savedKeys[0]?.id || ''),
+      results: mergeById(localState.results, remoteState.results)
+        .sort((first, second) => new Date(second.date).getTime() - new Date(first.date).getTime())
+    };
+  }
+
+  function loadWorkspaceMetadata() {
+    try {
+      const metadata = JSON.parse(localStorage.getItem(syncMetadataKey) || '{}');
+      return {
+        revision: Number.isInteger(metadata.revision) ? metadata.revision : null,
+        dirty: metadata.dirty === true
+      };
+    } catch (error) {
+      console.error('Não foi possível ler o estado de sincronização local.', error);
+      return { revision: null, dirty: false };
+    }
+  }
+
+  function saveWorkspaceMetadata(revision, dirty) {
+    try {
+      localStorage.setItem(syncMetadataKey, JSON.stringify({ revision, dirty }));
+    } catch (error) {
+      console.error('Não foi possível guardar o estado de sincronização local.', error);
+      setWorkspaceSyncStatus('Sincronização não confirmada', true);
+    }
+  }
+
+  function setWorkspaceSyncStatus(message, isError = false) {
+    if (!elements.workspaceSyncStatus) return;
+    elements.workspaceSyncStatus.textContent = message;
+    elements.workspaceSyncStatus.classList.toggle('error', isError);
   }
 
   function isValidRosterStudent(student) {
@@ -219,11 +288,146 @@
   function persist() {
     try {
       localStorage.setItem(activeStorageKey, JSON.stringify(state));
+      if (activeUserId && !activeUserIsAdmin) queueWorkspaceSync();
       return true;
     } catch (error) {
       console.error('Não foi possível salvar os dados neste navegador.', error);
       showToast('Não foi possível salvar. Verifique o espaço disponível no navegador.');
       return false;
+    }
+  }
+
+  function queueWorkspaceSync() {
+    if (!activeUserId || activeUserIsAdmin) return;
+    workspaceSyncRequested += 1;
+    saveWorkspaceMetadata(workspaceRevision, true);
+    setWorkspaceSyncStatus('Sincronizando…');
+    window.clearTimeout(workspaceSyncTimer);
+    workspaceSyncTimer = window.setTimeout(() => {
+      void flushWorkspaceSync();
+    }, 500);
+  }
+
+  async function readRemoteWorkspace(userId) {
+    const { data, error } = await supabaseClient
+      .from('teacher_workspaces')
+      .select('state, revision')
+      .eq('user_id', userId)
+      .maybeSingle();
+    if (error) throw error;
+    return data;
+  }
+
+  async function writeRemoteWorkspace(userId, snapshot) {
+    if (workspaceRevision === null) {
+      const { data, error } = await supabaseClient
+        .from('teacher_workspaces')
+        .insert({ user_id: userId, state: snapshot, revision: 1 })
+        .select('revision')
+        .maybeSingle();
+      if (error && error.code === '23505') return null;
+      if (error) throw error;
+      return data;
+    }
+
+    const nextRevision = workspaceRevision + 1;
+    const { data, error } = await supabaseClient
+      .from('teacher_workspaces')
+      .update({ state: snapshot, revision: nextRevision, updated_at: new Date().toISOString() })
+      .eq('user_id', userId)
+      .eq('revision', workspaceRevision)
+      .select('revision')
+      .maybeSingle();
+    if (error) throw error;
+    return data;
+  }
+
+  async function flushWorkspaceSync() {
+    if (workspaceSyncRunning || !activeUserId || activeUserIsAdmin) return;
+    workspaceSyncRunning = true;
+    const userId = activeUserId;
+    const sequence = activationSequence;
+    let conflictAttempts = 0;
+    try {
+      while (workspaceSyncCompleted < workspaceSyncRequested &&
+          activeUserId === userId && activationSequence === sequence) {
+        const requestedVersion = workspaceSyncRequested;
+        const snapshot = normalizeState(JSON.parse(JSON.stringify(state)));
+        const saved = await writeRemoteWorkspace(userId, snapshot);
+        if (activeUserId !== userId || activationSequence !== sequence) return;
+        if (!saved) {
+          conflictAttempts += 1;
+          if (conflictAttempts > 3) {
+            throw new Error('Os dados estão sendo alterados em outro aparelho. Aguarde e tente novamente.');
+          }
+          const remote = await readRemoteWorkspace(userId);
+          if (activeUserId !== userId || activationSequence !== sequence) return;
+          if (!remote) {
+            workspaceRevision = null;
+            continue;
+          }
+          state = mergeWorkspaceStates(state, normalizeState(remote.state));
+          workspaceRevision = remote.revision;
+          localStorage.setItem(activeStorageKey, JSON.stringify(state));
+          saveWorkspaceMetadata(workspaceRevision, true);
+          continue;
+        }
+        workspaceRevision = saved.revision;
+        workspaceSyncCompleted = requestedVersion;
+        const stillDirty = workspaceSyncCompleted < workspaceSyncRequested;
+        saveWorkspaceMetadata(workspaceRevision, stillDirty);
+        if (!stillDirty) setWorkspaceSyncStatus('Sincronizado');
+      }
+    } catch (error) {
+      console.error('Não foi possível sincronizar os dados do professor.', error);
+      if (activeUserId !== userId || activationSequence !== sequence) return;
+      workspaceSyncCompleted = workspaceSyncRequested;
+      setWorkspaceSyncStatus('Sincronização indisponível', true);
+      if (!workspaceSyncErrorShown) {
+        const missingTable = error.code === '42P01' || error.code === 'PGRST205';
+        showToast(missingTable
+          ? 'Para sincronizar entre aparelhos, execute supabase-schema.sql no Editor SQL do Supabase.'
+          : 'Os dados ficaram salvos neste aparelho, mas não foi possível sincronizá-los. Verifique a conexão e tente novamente.');
+        workspaceSyncErrorShown = true;
+      }
+    } finally {
+      workspaceSyncRunning = false;
+      if (activeUserId && !activeUserIsAdmin && workspaceSyncCompleted < workspaceSyncRequested) {
+        window.clearTimeout(workspaceSyncTimer);
+        workspaceSyncTimer = window.setTimeout(() => {
+          void flushWorkspaceSync();
+        }, 100);
+      }
+    }
+  }
+
+  async function hydrateWorkspaceFromCloud(userId, sequence) {
+    const localState = state;
+    const localMetadata = loadWorkspaceMetadata();
+    const remote = await readRemoteWorkspace(userId);
+    if (sequence !== activationSequence || activeUserId !== userId) return;
+
+    workspaceRevision = remote?.revision ?? null;
+    const remoteState = remote ? normalizeState(remote.state) : createEmptyState();
+    const mergedState = remote
+      ? (localMetadata.dirty || localMetadata.revision === null
+        ? mergeWorkspaceStates(localState, remoteState)
+        : remoteState)
+      : localState;
+    const hasLocalChanges = !remote || JSON.stringify(mergedState) !== JSON.stringify(remoteState);
+    state = mergedState;
+    localStorage.setItem(activeStorageKey, JSON.stringify(state));
+    saveWorkspaceMetadata(workspaceRevision, hasLocalChanges);
+    if (hasLocalChanges) {
+      workspaceSyncRequested += 1;
+      setWorkspaceSyncStatus('Enviando dados deste aparelho…');
+      window.clearTimeout(workspaceSyncTimer);
+      workspaceSyncTimer = window.setTimeout(() => {
+        void flushWorkspaceSync();
+      }, 100);
+    } else {
+      workspaceSyncCompleted = workspaceSyncRequested;
+      setWorkspaceSyncStatus('Sincronizado');
     }
   }
 
@@ -968,15 +1172,20 @@
     setAuthMessage('');
     setAdminAuthMessage('');
     supabaseClient.auth.onAuthStateChange((_event, session) => {
-      activateUser(session?.user || null);
+      void activateUser(session?.user || null);
     });
     supabaseClient.auth.getSession().then(({ data, error }) => {
       if (error) throw error;
-      activateUser(data.session?.user || null);
+      void activateUser(data.session?.user || null);
     }).catch((error) => {
       console.error('Não foi possível verificar a sessão de autenticação.', error);
       setAuthMessage('Não foi possível validar a sessão. Verifique sua conexão e tente novamente.', true);
       setAdminAuthMessage('Não foi possível validar a sessão. Verifique sua conexão e tente novamente.', true);
+    });
+    window.addEventListener('online', () => {
+      if (activeUserId && !activeUserIsAdmin && loadWorkspaceMetadata().dirty) {
+        queueWorkspaceSync();
+      }
     });
   }
 
@@ -1033,8 +1242,14 @@
     }
   }
 
-  function activateUser(user) {
+  async function activateUser(user) {
+    if (user && activeUserId === user.id) return;
+    const sequence = ++activationSequence;
+    window.clearTimeout(workspaceSyncTimer);
     if (!user) {
+      workspaceSyncRequested = 0;
+      workspaceSyncCompleted = 0;
+      workspaceRevision = null;
       activeUserId = null;
       activeUserIsAdmin = false;
       directory = { classes: [], students: [], subjects: [], teachers: [], areas: [] };
@@ -1054,9 +1269,9 @@
       elements.adminLoginPassword.value = '';
       setAuthMessage('');
       setAdminAuthMessage('');
+      setWorkspaceSyncStatus('Sincronização pendente');
       return;
     }
-    if (activeUserId === user.id) return;
     if (activeUserId && appInitialized) {
       resetDirectoryForm('classes');
       resetDirectoryForm('students');
@@ -1068,7 +1283,29 @@
     activeUserIsAdmin = (user.email || '').toLowerCase() ===
       (window.SUPABASE_CONFIG.adminEmail || '').trim().toLowerCase();
     activeStorageKey = `${STORAGE_KEY}:${user.id}`;
+    syncMetadataKey = `${activeStorageKey}:sync`;
     state = loadState();
+    workspaceSyncRequested = 0;
+    workspaceSyncCompleted = 0;
+    workspaceRevision = loadWorkspaceMetadata().revision;
+    workspaceSyncErrorShown = false;
+    setWorkspaceSyncStatus(activeUserIsAdmin ? '' : 'Carregando dados…');
+    if (!activeUserIsAdmin) {
+      try {
+        await hydrateWorkspaceFromCloud(user.id, sequence);
+      } catch (error) {
+        console.error('Não foi possível carregar os dados sincronizados.', error);
+        if (sequence === activationSequence && activeUserId === user.id) {
+          setWorkspaceSyncStatus('Sincronização indisponível', true);
+          const missingTable = error.code === '42P01' || error.code === 'PGRST205';
+          showToast(missingTable
+            ? 'Dados locais carregados. Execute supabase-schema.sql no Supabase para ativar a sincronização.'
+            : 'Dados locais carregados, mas não foi possível conectar à sincronização. Verifique a conexão.');
+          workspaceSyncErrorShown = true;
+        }
+      }
+    }
+    if (sequence !== activationSequence || activeUserId !== user.id) return;
     elements.loginScreen.hidden = true;
     elements.adminLoginScreen.hidden = true;
     elements.appShell.hidden = activeUserIsAdmin;
@@ -1796,7 +2033,7 @@
       elements.confirmOmrReading.disabled = true;
       elements.omrCameraStatus.className = 'scanner-status';
       elements.omrCameraStatus.textContent =
-        'Cartão não detectado. Mantenha os quatro marcadores visíveis dentro da guia e ajuste a distância.';
+        'Não localizei os marcadores. Deixe os quatro pretos dentro da guia, sem cortes, com foco e boa iluminação.';
       renderOmrLiveAnswers([]);
       return;
     }

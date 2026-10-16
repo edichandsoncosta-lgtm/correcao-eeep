@@ -80,7 +80,7 @@
           <div class="privacy-card">
             <span class="privacy-icon">⌑</span>
             <strong>Dados do professor</strong>
-            <p>Seus alunos, gabaritos e resultados ficam salvos neste navegador.</p>
+            <p>Após ativar a sincronização, seus alunos, gabaritos e resultados ficam disponíveis nos aparelhos da sua conta.</p>
           </div>
           <div class="school-caption">ESCOLA ESTADUAL DE EDUCAÇÃO PROFISSIONAL</div>
         </div>
@@ -91,6 +91,7 @@
           <span class="breadcrumb">Início <span>/</span> Visão geral</span>
           <div class="topbar-right">
             <span class="status-dot"></span><span id="user-email">Conta conectada</span>
+            <span class="workspace-sync-status" id="workspace-sync-status" role="status" aria-live="polite">Sincronização pendente</span>
             <button class="signout-button admin-access-button" id="admin-access-button" type="button">Acesso do administrador</button>
             <button class="signout-button" id="signout-button" type="button">Sair</button>
           </div>
@@ -392,14 +393,14 @@
         <button class="modal-close" data-close="omr-camera-modal" type="button" aria-label="Fechar">×</button>
         <p class="eyebrow">LEITURA ÓPTICA AO VIVO</p>
         <h2 id="omr-camera-title">Aponte para o cartão</h2>
-        <p class="modal-description">Escolha o gabarito e o aluno. Enquadre o cartão inteiro, com os quatro quadrados dos cantos visíveis; as respostas serão lidas ao vivo.</p>
+        <p class="modal-description">Escolha o gabarito e o aluno. Enquadre o cartão inteiro, com os quatro marcadores pretos visíveis dentro da guia; as respostas serão lidas ao vivo.</p>
         <div class="omr-camera-fields">
           <label class="field"><span>Gabarito</span><select id="omr-key-select" required><option value="">Selecione um gabarito salvo</option></select></label>
           <label class="field"><span>Aluno</span><select id="omr-student-select" required><option value="">Selecione um aluno ou teste</option></select></label>
         </div>
         <div class="omr-camera-view">
           <video id="omr-camera-video" autoplay playsinline muted></video>
-          <div class="omr-card-guide" aria-hidden="true"><span>Alinhe os 4 quadrados</span></div>
+          <div class="omr-card-guide" aria-hidden="true"><span>Mantenha os 4 marcadores dentro da guia</span></div>
         </div>
         <div class="scanner-status" id="omr-camera-status" role="status">Aguardando câmera…</div>
         <div class="omr-live-answers" id="omr-live-answers" aria-live="polite"></div>
